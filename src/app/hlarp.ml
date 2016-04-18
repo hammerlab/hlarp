@@ -86,7 +86,7 @@ module OptiType = struct
 
   let suffix = "_result.tsv"
 
-  (* The file is 2 directory down:
+  (* The file is 2 directories down:
       1st is the 'run' name.
       2nd is the date, since there can be multiple datetimes we'll need some
         logic to combine them.
@@ -140,7 +140,7 @@ module OptiType = struct
     in
     loop [] [dir]
     |> List.map ~f:parse
-    |> List.sort ~cmp:compare (* sort by keys aka-runs *)
+    |> List.sort ~cmp:compare (* Sort by keys aka-runs *)
     |> (function              (* Do some deduping of the multi-date things *)
         | [] -> []
         | (((r1,_r2),_) :: _) as lst ->
