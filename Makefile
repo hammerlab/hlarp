@@ -6,7 +6,7 @@ SOURCE_DIRS=/util /unc /stats /cls /rgr /uns
 
 #install uninstall setup
 
-.PHONY: default clean build setup 
+.PHONY: default clean build setup
 
 default: build
 
@@ -17,7 +17,7 @@ setup:
 oml.cmxa:
 
 build: oml.cmxa
-	ocamlbuild -use-ocamlfind $(foreach package, $(PACKAGES),-package $(package)) -I src/app hlarp.native
+	ocamlbuild -use-ocamlfind $(foreach package, $(PACKAGES),-package $(package)) -I src/app -I src/lib hlarp.native
 
 clean:
 	ocamlbuild -clean
