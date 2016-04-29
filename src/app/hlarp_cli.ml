@@ -7,7 +7,7 @@ class,allele,qualifier,confidence
 open Nonstd
 open Printf
 
-open Hlarp_pure
+open Hlarp
 
 let project_name = "hlarp"
 
