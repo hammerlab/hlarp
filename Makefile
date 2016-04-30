@@ -14,10 +14,8 @@ default: build
 setup:
 	opam install $(PACKAGES_INSTALL)
 
-oml.cmxa:
-
-build: oml.cmxa
-	ocamlbuild -use-ocamlfind $(foreach package, $(PACKAGES),-package $(package)) -I src/app -I src/lib hlarp.native
+build:
+	ocamlbuild -use-ocamlfind $(foreach package, $(PACKAGES),-package $(package)) -I src/app -I src/lib hlarp_cli.native
 
 clean:
 	ocamlbuild -clean
