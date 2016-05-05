@@ -1,0 +1,4 @@
+PKG nonstd re re.posix re.glob cmdliner
+S ./src/lib/**
+S ./src/app/**
+B _build/**
