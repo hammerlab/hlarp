@@ -56,7 +56,15 @@ let () =
           $ (directory_arg ~tool ~suffix:OptiType.suffix)
         , info tool ~doc:"Parse OptiType output")
   in
-  let cmds = [seq2HLA; optitype] in
+  let athlates =
+    let tool = "athlates" in
+    Term.(const (fun dir ->
+            Athlates.scan_directory dir
+            |> Output.out_channel stdout)
+          $ (directory_arg ~tool ~suffix:Athlates.suffix)
+        , info tool ~doc:"Parse ATHLATES output")
+  in
+  let cmds = [seq2HLA; optitype; athlates] in
   match Term.eval_choice help_cmd cmds with
   | `Ok () -> ()
   | `Error _ -> failwith "cmdliner error"
