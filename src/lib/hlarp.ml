@@ -162,7 +162,7 @@ module Athlates = struct
   let header_start = "------------ Inferred Allelic Pairs -------------"
 
   let allele_to_hla_class s =
-    if String.get s 1 = 'D' then II else I
+    if String.get s 0 = 'D' then II else I
 
   let parse ?(equal_pairs=`ReportAll) (fname, re_group) =
     let run = Re.Group.get re_group 1 in
