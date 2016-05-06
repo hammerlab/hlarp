@@ -23,8 +23,8 @@ type info =
 
 module Seq2HLA = struct
 
-  let suffix = "HLAgenotype4digits"
-  let filename_regex = Re_posix.compile_pat ("(.+)-Class(I{1,2})." ^ suffix)
+  let suffix = ".HLAgenotype4digits"
+  let filename_regex = Re_posix.compile_pat ("(.+)-Class(I{1,2})" ^ suffix)
 
   let to_hla_class = function
     | "I" -> I

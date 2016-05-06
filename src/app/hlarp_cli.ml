@@ -32,13 +32,15 @@ let () =
         , info project_name ~version ~doc ~man)
   in
   let directory_arg ~tool ~suffix =
-    let doc =
-      sprintf "Directory to find %s output.\
-                      \n%s will search for files with %s suffix.\
-                      Defaults to looking in the current dir."
-              tool project_name suffix
+    let docv = "directory" in
+    let doc = sprintf
+        "Directory to find %s output. %s will search for files with \"%s\" \
+         filename suffix. Defaults to looking in the current dir."
+          tool project_name suffix
     in
-    Arg.(value & pos 0 dir "." & info ~doc [])
+    Arg.(required
+         & pos 0 (some dir) (Some ".")
+         & info ~doc ~docv [])
   in
   let seq2HLA =
     let tool = "seq2HLA" in
