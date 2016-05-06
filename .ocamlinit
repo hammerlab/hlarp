@@ -1,0 +1,8 @@
+#require "nonstd"
+#require "re"
+#require "re.posix"
+#require "re.glob"
+#require "cmdliner"
+
+#directory "_build/src/lib"
+#load_rec "hlarp.cmo"
