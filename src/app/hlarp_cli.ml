@@ -81,7 +81,32 @@ let () =
           $ equal_pairs_flag
         , info tool ~doc:"Parse ATHLATES output")
   in
-  let cmds = [seq2HLA; optitype; athlates] in
+  let multiple =
+    let seq_arg = Arg.(value & opt_all dir [] & info ~doc:"Seq2HLA dir" ["s"; "seq2HLA"]) in
+    let opt_arg = Arg.(value & opt_all dir [] & info ~doc:"Optitype dir" ["o"; "optitype"]) in
+    let ath_arg = Arg.(value & opt_all dir [] & info ~doc:"ATHLATES dir" ["a"; "athlates"]) in
+    let pre_flg = Arg.(value & flag & info ~doc:"Do NOT prefix the run information with typer name." ["prefix"]) in
+    Term.(const (fun seqlst optlst athlst do_not_prefix ->
+            let p typer_name =
+              if do_not_prefix then
+                fun x -> x
+              else
+                List.map ~f:(fun (p,l) -> (typer_name ^ p, l))
+            in
+            [ List.map ~f:Seq2HLA.scan_directory seqlst |> List.map ~f:(p "seq2HLA_")
+            ; List.map ~f:OptiType.scan_directory optlst |> List.map ~f:(p "OptiType_")
+            ; List.map ~f:Athlates.scan_directory athlst |> List.map ~f:(p "ATHLATES_")
+            ]
+            |> List.concat
+            |> List.concat
+            |> Output.out_channel stdout)
+            $ seq_arg
+            $ opt_arg
+            $ ath_arg
+            $ pre_flg
+          , info "multiple" ~doc:"Multiple")
+  in
+  let cmds = [seq2HLA; optitype; athlates; multiple] in
   match Term.eval_choice help_cmd cmds with
   | `Ok () -> ()
   | `Error _ -> failwith "cmdliner error"
