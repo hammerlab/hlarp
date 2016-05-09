@@ -16,7 +16,7 @@ build:
 
 clean:
 	ocamlbuild -clean
-	-rm ./hlarp
+	-rm -f ./hlarp
 
 
 install:
