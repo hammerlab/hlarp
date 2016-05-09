@@ -1,5 +1,5 @@
-PACKAGES=nonstd re cmdliner
-PACKAGES_INSTALL=$(PACKAGES)
+PACKAGES_INSTALL=nonstd re cmdliner
+PACKAGES=$(PACKAGES_INSTALL) re.posix re.glob
 
 .PHONY: default clean build deps install uninstall
 
