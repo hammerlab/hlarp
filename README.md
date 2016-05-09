@@ -8,16 +8,26 @@ Pronounced "heh-larp".
 
 ## Installation
 
+You can get the tool from oasis with `opam install hlarp`, or download it and
+install from master locally, from the `hlarp` git directory, with the following:
+
 ``` shell
-make setup # you don't need to do this more than once
-make
+opam pin add -k git hlarp .
 ```
 
-Now you can run hlarp with `./hlarp_cli.native`.
+Now you can run hlarp with `hlarp`.
 
 ## Using hlarp
 
 ``` shell
-./hlarp_cli.native seq2HLA /path/to/seq2HLA results directory > results.csv
-./hlarp_cli.native optitype /path/to/seq2HLA results directory > results.csv
+hlarp seq2HLA /path/to/seq2HLA results directory > results.csv
+hlarp optitype /path/to/seq2HLA results directory > results.csv
 ```
+
+You can also use the `hlarp` module: 
+
+``` ocaml
+open Hlarp
+...
+```
+

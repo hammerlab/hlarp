@@ -1,27 +1,33 @@
-
-PACKAGES=nonstd re re.posix re.glob cmdliner
+PACKAGES=nonstd re cmdliner
 PACKAGES_INSTALL=$(PACKAGES)
 
-SOURCE_DIRS=/util /unc /stats /cls /rgr /uns
-
-#install uninstall setup
-
-.PHONY: default clean build setup
+.PHONY: default clean build deps install uninstall
 
 default: build
 
-# This should be called something else.
-setup:
+deps:
 	opam install $(PACKAGES_INSTALL)
 
 build:
-	ocamlbuild -use-ocamlfind $(foreach package, $(PACKAGES),-package $(package)) -I src/app -I src/lib hlarp_cli.native
+	ocamlbuild -use-ocamlfind $(foreach package, $(PACKAGES),-package $(package)) \
+           -I src/app -I src/lib hlarp_cli.native \
+           hlarp.cma hlarp.cmxs hlarp.cmxa
+	cp hlarp_cli.native hlarp
 
 clean:
 	ocamlbuild -clean
+	-rm ./hlarp
 
-#install:
-#	ocamlfind install META \
 
-#uninstall:
-#	ocamlfind remove oml
+install:
+	ocamlfind install hlarp META\
+	    _build/src/lib/hlarp.a\
+	    _build/src/lib/hlarp.o\
+	    _build/src/lib/hlarp.cma\
+	    _build/src/lib/hlarp.cmi\
+	    _build/src/lib/hlarp.cmo\
+	    _build/src/lib/hlarp.cmx\
+	    _build/src/lib/hlarp.cmxa\
+            _build/src/lib/hlarp.cmxs
+uninstall:
+	ocamlfind remove hlarp
