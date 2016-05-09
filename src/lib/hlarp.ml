@@ -11,7 +11,6 @@ let join_by_fst lst =
         ~init:StringMap.empty
   |> StringMap.bindings
 
-
 type hla_class = | I | II
 
 type info =
@@ -20,6 +19,8 @@ type info =
   ; qualifier   : string
   ; confidence  : float
   }
+
+module InfoMap = Map.Make (struct type t = info let compare = compare end)
 
 module Seq2HLA = struct
 
@@ -164,7 +165,7 @@ module Athlates = struct
   let allele_to_hla_class s =
     if String.get s 0 = 'D' then II else I
 
-  let parse ?(equal_pairs=`ReportAll) (fname, re_group) =
+  let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
     let run = Re.Group.get re_group 1 in
     let ic = open_in fname in
     let rec loop found_header acc =
@@ -175,27 +176,19 @@ module Athlates = struct
         else if found_header && line <> "" then
           let a1, a2 =
             Scanf.sscanf line "%s\t\t%s\t\t%f"
-              (fun allele1 allele2 conf ->
+              (fun allele1 allele2 confidence ->
                 { hla_class  = allele_to_hla_class allele1
                 ; allele     = allele1
-                ; qualifier = ""
-                ; confidence = 1.0 -. conf
+                ; qualifier  = ""
+                ; confidence
                 },
                 { hla_class  = allele_to_hla_class allele2
                 ; allele     = allele2
-                ; qualifier = ""
-                ; confidence = 1.0 -. conf   (* Don't REALLY understand their metric *)
+                ; qualifier  = ""
+                ; confidence
                 })
           in
-          let nacc =
-            match equal_pairs with
-            | `ReportAll -> a1 :: a2 :: acc
-            | `FirstPair -> if acc = [] then a1 :: a2 :: [] else acc
-            | `Unique    ->
-              let add_if_new a set = if List.mem a ~set then set else a :: set in
-              add_if_new a2 (add_if_new a1 acc)
-          in
-          loop true nacc
+          loop true (a1 :: a2 :: acc)
         else
           loop found_header acc
       with End_of_file ->
@@ -203,6 +196,26 @@ module Athlates = struct
         acc
     in
     let alleles = loop false [] in
+    let alleles =
+      match equal_pairs with
+      | `ReportAll      -> alleles
+                        (* Will fail silently if < 2, I think ok. *)
+      | `FirstPair      -> List.take (List.rev alleles) 2
+      | `Unique         -> List.dedup alleles
+      | `MostLikelyPair ->
+          let totalf = float (List.length alleles) in
+          List.fold_left alleles ~f:(fun m a ->
+            match InfoMap.find a m with
+            | exception Not_found -> InfoMap.add a 1 m
+            | n -> InfoMap.add a (n + 1) m) ~init:InfoMap.empty
+          |> InfoMap.bindings
+          |> List.sort ~cmp:(fun (_a1, c1) (_a2, c2) -> compare c2 c1 (* reverse *))
+          |> (fun lst -> List.take lst 2)
+          |> List.map ~f:(fun (a, c) -> { a with confidence = (float c) /. totalf })
+          |> function
+              | a :: [] -> [a; a] (* Preserve pair to signal homozygosity *)
+              | lst     -> lst
+    in
     run, alleles
 
   let scan_directory ?equal_pairs dir =

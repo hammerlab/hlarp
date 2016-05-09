@@ -60,10 +60,25 @@ let () =
   in
   let athlates =
     let tool = "athlates" in
-    Term.(const (fun dir ->
-            Athlates.scan_directory dir
+    let equal_pairs_flag =
+      Arg.(value
+           & vflag `MostLikelyPair
+              [ `MostLikelyPair, info ["most_likely_pair"]
+                  ~doc:"For each typing file report the most frequent two alleles (default)."
+              ; `ReportAll,      info ["all_pairs"]
+                  ~doc:"For each typing file report all pairs (will create duplicates)."
+              ; `FirstPair,      info ["first_pair"]
+                  ~doc:"For each typing file report only the first pair (may create duplicates)."
+              ; `Unique,         info ["unique"]
+                  ~doc:"For each typing file report only the unique alleles."
+              ]
+      )
+    in
+    Term.(const (fun dir equal_pairs ->
+            Athlates.scan_directory ~equal_pairs dir
             |> Output.out_channel stdout)
-          $ (directory_arg ~tool ~suffix:Athlates.suffix)
+          $ directory_arg ~tool ~suffix:Athlates.suffix
+          $ equal_pairs_flag
         , info tool ~doc:"Parse ATHLATES output")
   in
   let cmds = [seq2HLA; optitype; athlates] in
