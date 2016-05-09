@@ -212,6 +212,9 @@ module Athlates = struct
           |> List.sort ~cmp:(fun (_a1, c1) (_a2, c2) -> compare c2 c1 (* reverse *))
           |> (fun lst -> List.take lst 2)
           |> List.map ~f:(fun (a, c) -> { a with confidence = (float c) /. totalf })
+          |> function
+              | a :: [] -> [a; a] (* Preserve pair to signal homozygosity *)
+              | lst     -> lst
     in
     run, alleles
 
