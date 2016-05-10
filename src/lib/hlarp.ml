@@ -104,8 +104,8 @@ module OptiType = struct
 
   let parse fname =
     let grp = Re.all filename_regex fname |> List.hd_exn in
-    let ri1 = Re.Group.get grp 1 in
-    let ri2 = Re.Group.get grp 2 in
+    let run = Re.Group.get grp 1 in
+    let time_stamp = Re.Group.get grp 2 in
     let ic  = open_in fname in
     let hdr = input_line ic in
     if hdr <> "\tA1\tA2\tB1\tB2\tC1\tC2\tReads\tObjective" then
@@ -124,7 +124,7 @@ module OptiType = struct
              [ info a1 ; info a2 ; info b1 ; info b2 ; info c1 ; info c2 ])
       in
       close_in ic;
-      (ri1, ri2), lst
+      (run, time_stamp), lst
 
   let glob_regex = Re.compile (Re_glob.glob ("*" ^ suffix))
 
@@ -150,17 +150,16 @@ module OptiType = struct
     |> List.sort ~cmp:compare (* Sort by keys aka-runs *)
     |> (function              (* Do some deduping of the multi-date things *)
         | [] -> []
-        | (((r1,_r2),_) :: _) as lst ->
+        | (((first_run,_timestamp_dir),first_res) :: _) as lst ->
           match combine_multiday with
           | `TakeLast ->
-              List.fold_left ~f:(fun (prev_r1, prev_res, acc) ((r1, _r2), lst) ->
-                if prev_r1 = r1 then
-                  (r1, lst, acc)
-                else
-                  (r1, lst, (prev_r1, prev_res) :: acc))
-              ~init:("not r1" ^ r1, [], [])
-              lst
-            |> (fun (_, _, acc) -> acc))
+              List.fold_left lst ~init:(first_run, first_res, []) 
+                ~f:(fun (previous_run, prev_res, acc) ((next_run, _timestamp_dir), lst) ->
+                      if previous_run = next_run then
+                        (next_run, lst, acc)  (* ignore the previous run's results. *)
+                      else
+                        (next_run, lst, (previous_run, prev_res) :: acc))
+              |> (fun (p, l, acc) -> (p, l) :: acc))
 
 end (* OptiType *)
 
