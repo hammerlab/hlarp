@@ -11,6 +11,50 @@ open Hlarp
 
 let project_name = "hlarp"
 
+let multiple seqlst optlst athlst do_not_prefix =
+  let p typer_name =
+    if do_not_prefix then
+      fun x -> x
+    else
+      List.map ~f:(fun (p,l) -> (typer_name ^ p, l))
+  in
+  [ List.map ~f:Seq2HLA.scan_directory seqlst |> List.map ~f:(p "seq2HLA_")
+  ; List.map ~f:OptiType.scan_directory optlst |> List.map ~f:(p "OptiType_")
+  ; List.map ~f:Athlates.scan_directory athlst |> List.map ~f:(p "ATHLATES_")
+  ]
+  |> List.concat
+  |> List.concat
+  |> Output.out_channel stdout
+
+let to_prefix name lst =
+  if List.length lst > 1 then
+    (fun i -> sprintf "%s%d" name (i + 1))
+  else
+    fun _ -> name
+
+module RunMap = Map.Make (struct type t = string let compare = compare end)
+
+let compare seqlst optlst athlst =
+  let add_to_run_map name scan dirlst run_map =
+    let prefix = to_prefix name dirlst in
+    List.foldi dirlst ~init:run_map ~f:(fun i rmp dir ->
+        let p = prefix i in
+        scan dir
+        |> List.fold_left ~init:rmp ~f:(fun rmp (run, info_lst) ->
+            let annotated = List.map ~f:(fun i -> (i, p)) info_lst in
+            match RunMap.find run rmp with
+            | lst                 -> RunMap.add run (annotated @ lst) rmp
+            | exception Not_found -> RunMap.add run annotated rmp))
+  in
+  RunMap.empty
+  |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
+  |> add_to_run_map "OptiType" OptiType.scan_directory optlst
+  |> add_to_run_map "ATHLATES" Athlates.scan_directory athlst
+  |> RunMap.bindings
+  |> List.iter ~f:(fun (run, info_p_lst) ->
+      Printf.printf "run: %s\n" run;
+      info_p_lst |> CompareByLocus.by_loci |> CompareByLocus.output stdout)
+
 let () =
   let open Cmdliner in
   let version = "0.0.0" in
@@ -81,32 +125,19 @@ let () =
           $ equal_pairs_flag
         , info tool ~doc:"Parse ATHLATES output")
   in
+  let seq_arg = Arg.(value & opt_all dir [] & info ~doc:"Seq2HLA dir" ["s"; "seq2HLA"]) in
+  let opt_arg = Arg.(value & opt_all dir [] & info ~doc:"Optitype dir" ["o"; "optitype"]) in
+  let ath_arg = Arg.(value & opt_all dir [] & info ~doc:"ATHLATES dir" ["a"; "athlates"]) in
   let multiple =
-    let seq_arg = Arg.(value & opt_all dir [] & info ~doc:"Seq2HLA dir" ["s"; "seq2HLA"]) in
-    let opt_arg = Arg.(value & opt_all dir [] & info ~doc:"Optitype dir" ["o"; "optitype"]) in
-    let ath_arg = Arg.(value & opt_all dir [] & info ~doc:"ATHLATES dir" ["a"; "athlates"]) in
     let pre_flg = Arg.(value & flag & info ~doc:"Do NOT prefix the run information with typer name." ["prefix"]) in
-    Term.(const (fun seqlst optlst athlst do_not_prefix ->
-            let p typer_name =
-              if do_not_prefix then
-                fun x -> x
-              else
-                List.map ~f:(fun (p,l) -> (typer_name ^ p, l))
-            in
-            [ List.map ~f:Seq2HLA.scan_directory seqlst |> List.map ~f:(p "seq2HLA_")
-            ; List.map ~f:OptiType.scan_directory optlst |> List.map ~f:(p "OptiType_")
-            ; List.map ~f:Athlates.scan_directory athlst |> List.map ~f:(p "ATHLATES_")
-            ]
-            |> List.concat
-            |> List.concat
-            |> Output.out_channel stdout)
-            $ seq_arg
-            $ opt_arg
-            $ ath_arg
-            $ pre_flg
-          , info "multiple" ~doc:"Multiple")
+    Term.(const multiple $ seq_arg $ opt_arg $ ath_arg $ pre_flg
+        , info "multiple" ~doc:"Multiple")
   in
-  let cmds = [seq2HLA; optitype; athlates; multiple] in
+  let compare =
+    Term.(const compare $ seq_arg $ opt_arg $ ath_arg
+        , info "compare" ~doc:"Compare")
+  in
+  let cmds = [seq2HLA; optitype; athlates; multiple; compare] in
   match Term.eval_choice help_cmd cmds with
   | `Ok () -> ()
   | `Error _ -> failwith "cmdliner error"

@@ -13,12 +13,22 @@ let join_by_fst lst =
 
 type hla_class = | I | II
 
+let hla_class_to_string = function | I -> "1" | II -> "2"
+
+(* This type is a place holder in case we want to
+   make a full ADT of MHC alleles in the future. *)
+type allele = string
+
 type info =
   { hla_class   : hla_class
-  ; allele      : string
+  ; allele      : allele
   ; qualifier   : string
   ; confidence  : float
   }
+
+let info_to_string { hla_class; allele; qualifier; confidence} =
+  sprintf "%s-%s-%s-%f" (hla_class_to_string hla_class)
+    allele qualifier confidence
 
 module InfoMap = Map.Make (struct type t = info let compare = compare end)
 
@@ -243,9 +253,100 @@ module Athlates = struct
 
 end (* Athlates *)
 
-module Output = struct
+module CompareByLocus = struct
 
-  let hla_class_to_string = function | I -> "1" | II -> "2"
+  type locus =
+    | A
+    | B
+    | C
+    | DRB1
+    | DRB3
+    | DRB4
+    | DRB5
+
+  let locus_to_string = function
+    | A     -> "A"
+    | B     -> "B"
+    | C     -> "C"
+    | DRB1  -> "DRB1"
+    | DRB3  -> "DRB3"
+    | DRB4  -> "DRB4"
+    | DRB5  -> "DRB5"
+
+  let known_loci = [ A; B; C; DRB1; DRB3; DRB4; DRB5 ]
+
+  let allele_to_locus allele =
+    try
+      let i = String.index allele '*' in
+      match String.sub allele 0 i with
+      | "A"    -> Some A
+      | "B"    -> Some B
+      | "C"    -> Some C
+      | "DRB1" -> Some DRB1
+      | "DRB3" -> Some DRB3
+      | "DRB4" -> Some DRB4
+      | "DRB5" -> Some DRB5
+      | _ -> eprintf "Unrecognized allele to locus conversion: %s" allele;
+             None
+    with Not_found ->
+      eprintf "Unrecognized allele to locus conversion: %s" allele;
+      None
+
+  (* An ad-hoc grouping operation. *)
+  let group by select lst =
+    let rec loop acc = function
+      | []     -> acc
+      | h :: t ->
+        let b = by h in
+        let s = select h in
+        let like, not_like =
+          List.partition_map t ~f:(fun l ->
+            if by l = b then `Fst (select l) else `Snd l)
+        in
+        (* The sort here allows us to compare lists *)
+        let s_like = List.sort ~cmp:compare (s :: like) in
+        let n = List.length s_like in
+        loop ((n, b, s_like) :: acc) not_like
+  in
+  loop [] lst
+
+  let by_loci lst =
+    let by (_key, ai) = ai.allele in
+    let select (key, _ai) = key in
+    let lm =
+      List.fold_left lst ~init:[] ~f:(fun lm (ai, k) ->
+        match allele_to_locus ai.allele with
+        | None   -> lm  (* ignore, warning triggered by failed conversion. *)
+        | Some l -> (l, (k, ai)) :: lm)
+    in
+    let g1, _g2 =
+      List.fold_left known_loci ~init:([], lm) ~f:(fun (acc, lm) locus ->
+          let from_locus, not_from_locus =
+            List.partition ~f:(fun (l,_) -> l = locus) lm
+          in
+          if from_locus = [] then
+            (acc, not_from_locus) (* locus not report *)
+          else
+            let f1 = List.map ~f:snd from_locus in
+            let f2 = group by select f1 in
+            let in_locus = List.sort ~cmp:(fun (n1, _, _) (n2, _, _) -> compare n2 n1) f2 in
+            (locus, in_locus) :: acc, not_from_locus)
+    in
+    List.rev g1
+    (*|> snd
+    |> List.rev  get results back in 'known_loci' order *)
+
+  let output oc lst =
+    List.iter lst ~f:(fun (locus, in_locus) ->
+      Printf.fprintf oc "%s:\n" (locus_to_string locus);
+      List.iter in_locus ~f:(fun (_n, allele, keys_lst) ->
+        Printf.fprintf oc "\t%s:\t%s\n" allele (String.concat "," keys_lst)))
+    (*  List.iter in_locus ~f:(fun key ->
+        Printf.fprintf oc "\t%s:\t%s\n" allele (String.concat "," keys))) *)
+
+end (* CompareByLocus *)
+
+module Output = struct
 
   let nan_is_empty f = if f <> f then "" else sprintf "%f" f
 
