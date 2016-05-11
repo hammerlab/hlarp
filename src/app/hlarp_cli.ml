@@ -26,9 +26,10 @@ let multiple seqlst optlst athlst do_not_prefix =
   |> List.concat
   |> Output.out_channel stdout
 
-let compare resolution seqlst optlst athlst =
+let compare resolution classes seqlst optlst athlst =
+  let classes = match classes with | [] -> None | l -> Some l in
   Compare.nested_maps seqlst optlst athlst
-  |> Compare.output ?resolution stdout
+  |> Compare.output ?resolution ?classes stdout
 
 let () =
   let open Cmdliner in
@@ -109,8 +110,8 @@ let () =
         , info "multiple" ~doc:"Multiple")
   in
   let compare =
-    let resolution_flag =
-      let bounded_int_converter =
+    let resolution_arg =
+      let one_to_four_converter =
         let parser_ = function
           | "1" | "2" | "3" | "4" as r -> `Ok (int_of_string r)
           | s -> `Error (sprintf "Not in [1,4]: %s" s)
@@ -118,11 +119,25 @@ let () =
         let printer f = Format.fprintf f "%d" in
         parser_, printer
       in
-      Arg.(value & opt (some bounded_int_converter) None
+      Arg.(value & opt (some one_to_four_converter) None
             & info ["r"; "resolution"]
               ~doc:"MHC allele resolution to use for the analysis. Must be an integer between 1 and 4.")
     in
-    Term.(const compare $ resolution_flag $ seq_arg $ opt_arg $ ath_arg
+    let classes_arg =
+      let one_or_two_converter =
+        let parser_ = function
+          | "1" -> `Ok I | "2" -> `Ok II
+          | s -> `Error (sprintf "Not in [1,2]: %s" s)
+        in
+        let printer f c = Format.fprintf f "%s" (hla_class_to_string c) in
+        parser_, printer
+      in
+      Arg.(value & opt_all one_or_two_converter []
+            & info ["c"; "class"]
+                ~doc:"MHC class along which to partition the similarity analysis: Must be 1 or 2.\
+                        Specify multiple classes to get separate analysis.")
+    in
+    Term.(const compare $ resolution_arg $ classes_arg $ seq_arg $ opt_arg $ ath_arg
         , info "compare" ~doc:"Compare")
   in
   let cmds = [seq2HLA; optitype; athlates; multiple; compare] in

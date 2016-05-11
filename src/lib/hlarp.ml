@@ -303,12 +303,12 @@ module Compare = struct
       let union = SSet.union s1 s2 |> SSet.cardinal in
       (float inter) /. (float union)
 
+  let to_class_filter = function
+    | None   -> fun _ -> true
+    | Some c -> fun ai -> ai.hla_class = c
+
   let compute_mean_jacard ?by_class ?(count_homozygous_2x=true) select typer_assoc =
-    let class_filter =
-      match by_class with
-      | None -> fun _ -> true
-      | Some c -> fun ai -> ai.hla_class = c
-    in
+    let class_filter = to_class_filter by_class in
     let set_of_ailst lst =
       List.fold_left lst ~init:SSet.empty
         ~f:(fun s ai ->
@@ -348,31 +348,66 @@ module Compare = struct
   let compress_counts =
     List.map ~f:(fun (a,c) -> if c < 2 then a else sprintf "%sx%d" a c)
 
-  let display_similarities select typer_assoc =
+  let group_similarities ?by_class select typer_assoc =
+    let class_filter = to_class_filter by_class in
     List.fold_left typer_assoc ~init:SMap.empty
       ~f:(fun m (typer, allele_lst) ->
         List.fold_left allele_lst ~init:m ~f:(fun m ai ->
-          let ai_sel = select ai in
-          match SMap.find ai_sel m with
-          | lst                 -> SMap.add ai_sel (typer :: lst) m
-          | exception Not_found -> SMap.add ai_sel (typer :: []) m))
+          if not (class_filter ai) then
+            m
+          else
+            let ai_sel = select ai in
+            match SMap.find ai_sel m with
+            | lst                 -> SMap.add ai_sel (typer :: lst) m
+            | exception Not_found -> SMap.add ai_sel (typer :: []) m))
     |> SMap.bindings
     |> List.sort ~cmp:compare
     |> List.map ~f:(fun (a, l) ->
         (a, count_consecutive_doubles l |> compress_counts))
 
-  let output ?resolution oc nested_map_output =
-    let s, n =
-      List.fold_left nested_map_output ~init:(0., 0)
-        ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
-              let jc = compute_mean_jacard (select_allele ?resolution) typer_assoc in
-              fprintf oc "%s\tjacard similarity: %f\n" run jc;
-              let by_allele = display_similarities (select_allele ?resolution) typer_assoc in
-              List.iter by_allele ~f:(fun (a, tlst) ->
-                fprintf oc "\t%s\t%s\n" a (String.concat ";" tlst));
-              jc_s +. jc, jc_n + 1)
+  (* ?classes: Allow more than one HLA_class to do the analysis on, but default
+      to ignoring the distinction. *)
+  let output ?resolution ?classes oc nested_map_output =
+    let select = select_allele ?resolution in
+    let cmj, group, default_indent, suffix, nc =
+      match classes with
+      | None ->
+          (fun typer_assoc -> [ compute_mean_jacard select typer_assoc ])
+          , (fun typer_assoc -> [ None, group_similarities select typer_assoc ])
+          , ""
+          , "y"
+          , 1
+      | Some hla_classes ->
+          (fun typer_assoc ->
+            List.map hla_classes ~f:(fun by_class ->
+              compute_mean_jacard ~by_class select typer_assoc))
+          , (fun typer_assoc ->
+              List.map hla_classes ~f:(fun by_class ->
+                (Some (hla_class_to_string by_class ^ ":\t")
+                , group_similarities ~by_class select typer_assoc)))
+          , "\t"
+          , "ies"
+          , List.length hla_classes
     in
-    fprintf oc "Average jacard similarity across runs: %f\n" (s /. (float n))
+    let float_lst_to_str l = String.concat "" (List.map ~f:(sprintf "%f") l) in
+    let ss, n =
+      List.fold_left nested_map_output ~init:(List.init nc ~f:(fun _ -> 0.), 0)
+        ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
+              let jc_lst = cmj typer_assoc in
+              fprintf oc "%s\tjacard similarit%s: %s\n" run suffix (float_lst_to_str jc_lst);
+              let group = group typer_assoc in
+              List.iter group ~f:(fun (cls_opt, by_cls_lst) ->
+                List.iteri by_cls_lst ~f:(fun i (a, tlst) ->
+                  let s1 =
+                    if i = 0 then Option.value ~default:default_indent cls_opt
+                    else default_indent
+                  in
+                  fprintf oc "\t%s%s\t%s\n" s1 a (String.concat ";" tlst)));
+              List.map2 ~f:(+.) jc_s jc_lst, jc_n + 1)
+    in
+    let nf = float n in
+    let avgs = List.map ~f:(fun x -> x /. nf) ss in
+    fprintf oc "Average jacard similarit%s across runs: %s\n" suffix (float_lst_to_str avgs)
 
 end (* Compare *)
 
