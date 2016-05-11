@@ -101,13 +101,22 @@ let () =
           $ equal_pairs_flag
         , info tool ~doc:"Parse ATHLATES output")
   in
-  let seq_arg = Arg.(value & opt_all dir [] & info ~doc:"Seq2HLA dir" ["s"; "seq2HLA"]) in
-  let opt_arg = Arg.(value & opt_all dir [] & info ~doc:"Optitype dir" ["o"; "optitype"]) in
-  let ath_arg = Arg.(value & opt_all dir [] & info ~doc:"ATHLATES dir" ["a"; "athlates"]) in
+  let to_directory_arg name arg_lst =
+    Arg.(value & opt_all dir []
+        & info arg_lst ~docv:"DIR"
+            ~doc:(sprintf "Directory to search for %s output (repeatable)." name))
+  in
+  let seq_arg = to_directory_arg "Seq2HLA" ["s"; "seq2HLA"] in
+  let opt_arg = to_directory_arg "Optitype" ["o"; "optitype"] in
+  let ath_arg = to_directory_arg "ATHLATES" ["a"; "athlates"] in
   let multiple =
-    let pre_flg = Arg.(value & flag & info ~doc:"Do NOT prefix the run information with typer name." ["prefix"]) in
+    let pre_flg =
+      Arg.(value & flag & info ["prefix"]
+            ~doc:"Do NOT prefix the run information with typer name.")
+    in
     Term.(const multiple $ seq_arg $ opt_arg $ ath_arg $ pre_flg
-        , info "multiple" ~doc:"Multiple")
+        , info "multiple"
+            ~doc:"Scan multiple directories (of possilby different formats) and report aggregate results.")
   in
   let compare =
     let resolution_arg =
@@ -138,7 +147,8 @@ let () =
                         Specify multiple classes to get separate analysis.")
     in
     Term.(const compare $ resolution_arg $ classes_arg $ seq_arg $ opt_arg $ ath_arg
-        , info "compare" ~doc:"Compare")
+        , info "compare"
+            ~doc:"Scan multiple directories (of possibly different formats) and compare the results after aggregating on a per run basis.")
   in
   let cmds = [seq2HLA; optitype; athlates; multiple; compare] in
   match Term.eval_choice help_cmd cmds with
