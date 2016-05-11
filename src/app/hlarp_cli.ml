@@ -26,34 +26,9 @@ let multiple seqlst optlst athlst do_not_prefix =
   |> List.concat
   |> Output.out_channel stdout
 
-let to_prefix name lst =
-  if List.length lst > 1 then
-    (fun i -> sprintf "%s%d" name (i + 1))
-  else
-    fun _ -> name
-
-module RunMap = Map.Make (struct type t = string let compare = compare end)
-
 let compare seqlst optlst athlst =
-  let add_to_run_map name scan dirlst run_map =
-    let prefix = to_prefix name dirlst in
-    List.foldi dirlst ~init:run_map ~f:(fun i rmp dir ->
-        let p = prefix i in
-        scan dir
-        |> List.fold_left ~init:rmp ~f:(fun rmp (run, info_lst) ->
-            let annotated = List.map ~f:(fun i -> (i, p)) info_lst in
-            match RunMap.find run rmp with
-            | lst                 -> RunMap.add run (annotated @ lst) rmp
-            | exception Not_found -> RunMap.add run annotated rmp))
-  in
-  RunMap.empty
-  |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
-  |> add_to_run_map "OptiType" OptiType.scan_directory optlst
-  |> add_to_run_map "ATHLATES" Athlates.scan_directory athlst
-  |> RunMap.bindings
-  |> List.iter ~f:(fun (run, info_p_lst) ->
-      Printf.printf "run: %s\n" run;
-      info_p_lst |> CompareByLocus.by_loci |> CompareByLocus.output stdout)
+  Compare.nested_maps seqlst optlst athlst
+  |> Compare.output stdout
 
 let () =
   let open Cmdliner in

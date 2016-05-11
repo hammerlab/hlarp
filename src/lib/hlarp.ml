@@ -252,98 +252,125 @@ module Athlates = struct
 
 end (* Athlates *)
 
-module CompareByLocus = struct
+module Compare = struct
 
-  type locus =
-    | A
-    | B
-    | C
-    | DRB1
-    | DRB3
-    | DRB4
-    | DRB5
+  module SMap = Map.Make (struct type t = string let compare = compare end)
+  module SSet = Set.Make (struct type t = string let compare = compare end)
 
-  let locus_to_string = function
-    | A     -> "A"
-    | B     -> "B"
-    | C     -> "C"
-    | DRB1  -> "DRB1"
-    | DRB3  -> "DRB3"
-    | DRB4  -> "DRB4"
-    | DRB5  -> "DRB5"
+  let to_prefix name lst =
+    if List.length lst > 1 then
+      (fun i -> sprintf "%s%d" name (i + 1))
+    else
+      fun _ -> name
 
-  let known_loci = [ A; B; C; DRB1; DRB3; DRB4; DRB5 ]
-
-  let allele_to_locus allele =
-    try
-      let i = String.index allele '*' in
-      match String.sub allele 0 i with
-      | "A"    -> Some A
-      | "B"    -> Some B
-      | "C"    -> Some C
-      | "DRB1" -> Some DRB1
-      | "DRB3" -> Some DRB3
-      | "DRB4" -> Some DRB4
-      | "DRB5" -> Some DRB5
-      | _ -> eprintf "Unrecognized allele to locus conversion: %s" allele;
-             None
-    with Not_found ->
-      eprintf "Unrecognized allele to locus conversion: %s" allele;
-      None
-
-  (* An ad-hoc grouping operation. *)
-  let group by select lst =
-    let rec loop acc = function
-      | []     -> acc
-      | h :: t ->
-        let b = by h in
-        let s = select h in
-        let like, not_like =
-          List.partition_map t ~f:(fun l ->
-            if by l = b then `Fst (select l) else `Snd l)
-        in
-        (* The sort here allows us to compare lists *)
-        let s_like = List.sort ~cmp:compare (s :: like) in
-        let n = List.length s_like in
-        loop ((n, b, s_like) :: acc) not_like
-  in
-  loop [] lst
-
-  let by_loci lst =
-    let by (_key, ai) = ai.allele in
-    let select (key, _ai) = key in
-    let lm =
-      List.fold_left lst ~init:[] ~f:(fun lm (ai, k) ->
-        match allele_to_locus ai.allele with
-        | None   -> lm  (* ignore, warning triggered by failed conversion. *)
-        | Some l -> (l, (k, ai)) :: lm)
+  let nested_maps seqlst optlst athlst =
+    let add_to_run_map name scan dirlst run_map =
+      let prefix = to_prefix name dirlst in
+      List.foldi dirlst ~init:run_map ~f:(fun i rmp dir ->
+          let p = prefix i in
+          scan dir
+          |> List.fold_left ~init:rmp ~f:(fun rmp (run, info_lst) ->
+              match SMap.find run rmp with
+              | lst                 -> SMap.add run ((p,info_lst) :: lst) rmp
+              | exception Not_found -> SMap.add run ((p,info_lst) :: []) rmp))
     in
-    let g1, _g2 =
-      List.fold_left known_loci ~init:([], lm) ~f:(fun (acc, lm) locus ->
-          let from_locus, not_from_locus =
-            List.partition ~f:(fun (l,_) -> l = locus) lm
-          in
-          if from_locus = [] then
-            (acc, not_from_locus) (* locus not report *)
-          else
-            let f1 = List.map ~f:snd from_locus in
-            let f2 = group by select f1 in
-            let in_locus = List.sort ~cmp:(fun (n1, _, _) (n2, _, _) -> compare n2 n1) f2 in
-            (locus, in_locus) :: acc, not_from_locus)
+    SMap.empty
+    |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
+    |> add_to_run_map "OptiType" OptiType.scan_directory optlst
+    |> add_to_run_map "ATHLATES" Athlates.scan_directory athlst
+    |> SMap.bindings
+
+  let fold_over_all_pairs ~f ~init lst =
+    let rec loop init = function
+      | []     -> init 
+      | h :: t -> loop (List.fold_left ~init ~f:(fun acc te -> f acc (h, te)) t) t
     in
-    List.rev g1
-    (*|> snd
-    |> List.rev  get results back in 'known_loci' order *)
+    loop init lst
 
-  let output oc lst =
-    List.iter lst ~f:(fun (locus, in_locus) ->
-      Printf.fprintf oc "%s:\n" (locus_to_string locus);
-      List.iter in_locus ~f:(fun (_n, allele, keys_lst) ->
-        Printf.fprintf oc "\t%s:\t%s\n" allele (String.concat "," keys_lst)))
-    (*  List.iter in_locus ~f:(fun key ->
-        Printf.fprintf oc "\t%s:\t%s\n" allele (String.concat "," keys))) *)
+  let colon_regex = Re_posix.compile_pat ":"
 
-end (* CompareByLocus *)
+  let select_allele ?resolution ai =
+    match resolution with
+    | None -> ai.allele 
+    | Some n -> List.take (Re.split colon_regex ai.allele) n
+                |> String.concat ":"
+
+  let jacard s1 s2 =
+    if SSet.is_empty s1 && SSet.is_empty s2 then
+      1.
+    else
+      let inter = SSet.inter s1 s2 |> SSet.cardinal in
+      let union = SSet.union s1 s2 |> SSet.cardinal in 
+      (float inter) /. (float union)
+
+  let compute_mean_jacard ?by_class ?(count_homozygous_2x=true) select typer_assoc =
+    let class_filter =
+      match by_class with
+      | None -> fun _ -> true
+      | Some c -> fun ai -> ai.hla_class = c
+    in
+    let set_of_ailst lst =
+      List.fold_left lst ~init:SSet.empty
+        ~f:(fun s ai ->
+              if class_filter ai then
+                let ai_sel = select ai in
+                if count_homozygous_2x && SSet.mem ai_sel s then
+                  SSet.add (ai_sel ^ "2") s
+                else
+                  SSet.add (select ai) s
+              else
+                s)
+    in
+    let as_sets =
+      List.map ~f:(fun (typer, allele_lst) ->
+        let s = set_of_ailst allele_lst in
+        (typer, s)) typer_assoc
+    in
+    let sum_jacard_index = 
+      fold_over_all_pairs as_sets ~init:0.
+        ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jacard s1 s2)
+    in
+    let nf = float (List.length as_sets) in
+    let num_pairs = nf *. (nf -. 1.) /. 2. in
+    sum_jacard_index /. num_pairs
+
+  let count_consecutive_doubles = function
+    | []      -> []
+    | h :: [] -> [ h, 1]
+    | h :: t  ->
+      let rec loop p c acc = function
+        | []     -> List.rev ((p, c) :: acc)
+        | h :: t when h = p -> loop p (c + 1) acc t
+        | h :: t            -> loop h 1 ((p,c) :: acc) t
+      in
+      loop h 1 [] t
+
+  let compress_counts =
+    List.map ~f:(fun (a,c) -> if c < 2 then a else sprintf "%sx%d" a c)
+
+  let display_similarities select typer_assoc =
+    List.fold_left typer_assoc ~init:SMap.empty 
+      ~f:(fun m (typer, allele_lst) ->
+        List.fold_left allele_lst ~init:m ~f:(fun m ai ->
+          let ai_sel = select ai in
+          match SMap.find ai_sel m with
+          | lst                 -> SMap.add ai_sel (typer :: lst) m
+          | exception Not_found -> SMap.add ai_sel (typer :: []) m))
+    |> SMap.bindings
+    |> List.sort ~cmp:compare
+    |> List.map ~f:(fun (a, l) ->
+        (a, count_consecutive_doubles l |> compress_counts))
+
+  let output ?resolution oc nested_map_output =
+    List.iter nested_map_output ~f:(fun (run, typer_assoc) ->
+      let jc = compute_mean_jacard (select_allele ?resolution) typer_assoc in
+      fprintf oc "%s\tjacard similarity: %f\n" run jc;
+      let by_allele = display_similarities (select_allele ?resolution) typer_assoc in
+      List.iter by_allele ~f:(fun (a, tlst) ->
+        fprintf oc "\t%s\t%s\n" a (String.concat ";" tlst)))
+
+
+end (* Compare *)
 
 module Output = struct
 
