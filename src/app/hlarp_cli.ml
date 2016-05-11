@@ -26,9 +26,9 @@ let multiple seqlst optlst athlst do_not_prefix =
   |> List.concat
   |> Output.out_channel stdout
 
-let compare seqlst optlst athlst =
+let compare resolution seqlst optlst athlst =
   Compare.nested_maps seqlst optlst athlst
-  |> Compare.output stdout
+  |> Compare.output ?resolution stdout
 
 let () =
   let open Cmdliner in
@@ -109,7 +109,20 @@ let () =
         , info "multiple" ~doc:"Multiple")
   in
   let compare =
-    Term.(const compare $ seq_arg $ opt_arg $ ath_arg
+    let resolution_flag =
+      let bounded_int_converter =
+        let parser_ = function
+          | "1" | "2" | "3" | "4" as r -> `Ok (int_of_string r)
+          | s -> `Error (sprintf "Not in [1,4]: %s" s)
+        in
+        let printer f = Format.fprintf f "%d" in
+        parser_, printer
+      in
+      Arg.(value & opt (some bounded_int_converter) None
+            & info ["r"; "resolution"]
+              ~doc:"MHC allele resolution to use for the analysis. Must be an integer between 1 and 4.")
+    in
+    Term.(const compare $ resolution_flag $ seq_arg $ opt_arg $ ath_arg
         , info "compare" ~doc:"Compare")
   in
   let cmds = [seq2HLA; optitype; athlates; multiple; compare] in
