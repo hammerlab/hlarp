@@ -389,7 +389,7 @@ module Compare = struct
           , "ies"
           , List.length hla_classes
     in
-    let float_lst_to_str l = String.concat "" (List.map ~f:(sprintf "%f") l) in
+    let float_lst_to_str l = String.concat " " (List.map ~f:(sprintf "%0.2f") l) in
     let ss, n =
       List.fold_left nested_map_output ~init:(List.init nc ~f:(fun _ -> 0.), 0)
         ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
