@@ -362,13 +362,17 @@ module Compare = struct
         (a, count_consecutive_doubles l |> compress_counts))
 
   let output ?resolution oc nested_map_output =
-    List.iter nested_map_output ~f:(fun (run, typer_assoc) ->
-      let jc = compute_mean_jacard (select_allele ?resolution) typer_assoc in
-      fprintf oc "%s\tjacard similarity: %f\n" run jc;
-      let by_allele = display_similarities (select_allele ?resolution) typer_assoc in
-      List.iter by_allele ~f:(fun (a, tlst) ->
-        fprintf oc "\t%s\t%s\n" a (String.concat ";" tlst)))
-
+    let s, n =
+      List.fold_left nested_map_output ~init:(0., 0)
+        ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
+              let jc = compute_mean_jacard (select_allele ?resolution) typer_assoc in
+              fprintf oc "%s\tjacard similarity: %f\n" run jc;
+              let by_allele = display_similarities (select_allele ?resolution) typer_assoc in
+              List.iter by_allele ~f:(fun (a, tlst) ->
+                fprintf oc "\t%s\t%s\n" a (String.concat ";" tlst));
+              jc_s +. jc, jc_n + 1)
+    in
+    fprintf oc "Average jacard similarity across runs: %f\n" (s /. (float n))
 
 end (* Compare *)
 
