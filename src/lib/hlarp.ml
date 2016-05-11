@@ -153,7 +153,7 @@ module OptiType = struct
         | (((first_run,_timestamp_dir),first_res) :: _) as lst ->
           match combine_multiday with
           | `TakeLast ->
-              List.fold_left lst ~init:(first_run, first_res, []) 
+              List.fold_left lst ~init:(first_run, first_res, [])
                 ~f:(fun (previous_run, prev_res, acc) ((next_run, _timestamp_dir), lst) ->
                       if previous_run = next_run then
                         (next_run, lst, acc)  (* ignore the previous run's results. *)
@@ -282,7 +282,7 @@ module Compare = struct
 
   let fold_over_all_pairs ~f ~init lst =
     let rec loop init = function
-      | []     -> init 
+      | []     -> init
       | h :: t -> loop (List.fold_left ~init ~f:(fun acc te -> f acc (h, te)) t) t
     in
     loop init lst
@@ -291,7 +291,7 @@ module Compare = struct
 
   let select_allele ?resolution ai =
     match resolution with
-    | None -> ai.allele 
+    | None -> ai.allele
     | Some n -> List.take (Re.split colon_regex ai.allele) n
                 |> String.concat ":"
 
@@ -300,7 +300,7 @@ module Compare = struct
       1.
     else
       let inter = SSet.inter s1 s2 |> SSet.cardinal in
-      let union = SSet.union s1 s2 |> SSet.cardinal in 
+      let union = SSet.union s1 s2 |> SSet.cardinal in
       (float inter) /. (float union)
 
   let compute_mean_jacard ?by_class ?(count_homozygous_2x=true) select typer_assoc =
@@ -326,7 +326,7 @@ module Compare = struct
         let s = set_of_ailst allele_lst in
         (typer, s)) typer_assoc
     in
-    let sum_jacard_index = 
+    let sum_jacard_index =
       fold_over_all_pairs as_sets ~init:0.
         ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jacard s1 s2)
     in
@@ -349,7 +349,7 @@ module Compare = struct
     List.map ~f:(fun (a,c) -> if c < 2 then a else sprintf "%sx%d" a c)
 
   let display_similarities select typer_assoc =
-    List.fold_left typer_assoc ~init:SMap.empty 
+    List.fold_left typer_assoc ~init:SMap.empty
       ~f:(fun m (typer, allele_lst) ->
         List.fold_left allele_lst ~init:m ~f:(fun m ai ->
           let ai_sel = select ai in
