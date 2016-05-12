@@ -13,12 +13,22 @@ let join_by_fst lst =
 
 type hla_class = | I | II
 
+let hla_class_to_string = function | I -> "1" | II -> "2"
+
+(* This type is a place holder in case we want to
+   make a full ADT of MHC alleles in the future. *)
+type allele = string
+
 type info =
   { hla_class   : hla_class
-  ; allele      : string
+  ; allele      : allele
   ; qualifier   : string
   ; confidence  : float
   }
+
+let info_to_string { hla_class; allele; qualifier; confidence} =
+  sprintf "%s-%s-%s-%f" (hla_class_to_string hla_class)
+    allele qualifier confidence
 
 module InfoMap = Map.Make (struct type t = info let compare = compare end)
 
@@ -94,8 +104,8 @@ module OptiType = struct
 
   let parse fname =
     let grp = Re.all filename_regex fname |> List.hd_exn in
-    let ri1 = Re.Group.get grp 1 in
-    let ri2 = Re.Group.get grp 2 in
+    let run = Re.Group.get grp 1 in
+    let time_stamp = Re.Group.get grp 2 in
     let ic  = open_in fname in
     let hdr = input_line ic in
     if hdr <> "\tA1\tA2\tB1\tB2\tC1\tC2\tReads\tObjective" then
@@ -114,7 +124,7 @@ module OptiType = struct
              [ info a1 ; info a2 ; info b1 ; info b2 ; info c1 ; info c2 ])
       in
       close_in ic;
-      (ri1, ri2), lst
+      (run, time_stamp), lst
 
   let glob_regex = Re.compile (Re_glob.glob ("*" ^ suffix))
 
@@ -140,17 +150,16 @@ module OptiType = struct
     |> List.sort ~cmp:compare (* Sort by keys aka-runs *)
     |> (function              (* Do some deduping of the multi-date things *)
         | [] -> []
-        | (((r1,_r2),_) :: _) as lst ->
+        | (((first_run,_timestamp_dir),first_res) :: _) as lst ->
           match combine_multiday with
           | `TakeLast ->
-              List.fold_left ~f:(fun (prev_r1, prev_res, acc) ((r1, _r2), lst) ->
-                if prev_r1 = r1 then
-                  (r1, lst, acc)
-                else
-                  (r1, lst, (prev_r1, prev_res) :: acc))
-              ~init:("not r1" ^ r1, [], [])
-              lst
-            |> (fun (_, _, acc) -> acc))
+              List.fold_left lst ~init:(first_run, first_res, [])
+                ~f:(fun (previous_run, prev_res, acc) ((next_run, _timestamp_dir), lst) ->
+                      if previous_run = next_run then
+                        (next_run, lst, acc)  (* ignore the previous run's results. *)
+                      else
+                        (next_run, lst, (previous_run, prev_res) :: acc))
+              |> (fun (p, l, acc) -> (p, l) :: acc))
 
 end (* OptiType *)
 
@@ -243,9 +252,166 @@ module Athlates = struct
 
 end (* Athlates *)
 
-module Output = struct
+module Compare = struct
 
-  let hla_class_to_string = function | I -> "1" | II -> "2"
+  module SMap = Map.Make (struct type t = string let compare = compare end)
+  module SSet = Set.Make (struct type t = string let compare = compare end)
+
+  let to_prefix name lst =
+    if List.length lst > 1 then
+      (fun i -> sprintf "%s%d" name (i + 1))
+    else
+      fun _ -> name
+
+  let nested_maps seqlst optlst athlst =
+    let add_to_run_map name scan dirlst run_map =
+      let prefix = to_prefix name dirlst in
+      List.foldi dirlst ~init:run_map ~f:(fun i rmp dir ->
+          let p = prefix i in
+          scan dir
+          |> List.fold_left ~init:rmp ~f:(fun rmp (run, info_lst) ->
+              match SMap.find run rmp with
+              | lst                 -> SMap.add run ((p,info_lst) :: lst) rmp
+              | exception Not_found -> SMap.add run ((p,info_lst) :: []) rmp))
+    in
+    SMap.empty
+    |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
+    |> add_to_run_map "OptiType" OptiType.scan_directory optlst
+    |> add_to_run_map "ATHLATES" Athlates.scan_directory athlst
+    |> SMap.bindings
+
+  let fold_over_all_pairs ~f ~init lst =
+    let rec loop init = function
+      | []     -> init
+      | h :: t -> loop (List.fold_left ~init ~f:(fun acc te -> f acc (h, te)) t) t
+    in
+    loop init lst
+
+  let colon_regex = Re_posix.compile_pat ":"
+
+  let select_allele ?resolution ai =
+    match resolution with
+    | None -> ai.allele
+    | Some n -> List.take (Re.split colon_regex ai.allele) n
+                |> String.concat ":"
+
+  let jacard s1 s2 =
+    if SSet.is_empty s1 && SSet.is_empty s2 then
+      1.
+    else
+      let inter = SSet.inter s1 s2 |> SSet.cardinal in
+      let union = SSet.union s1 s2 |> SSet.cardinal in
+      (float inter) /. (float union)
+
+  let to_class_filter = function
+    | None   -> fun _ -> true
+    | Some c -> fun ai -> ai.hla_class = c
+
+  let compute_mean_jacard ?by_class ?(count_homozygous_2x=true) select typer_assoc =
+    let class_filter = to_class_filter by_class in
+    let set_of_ailst lst =
+      List.fold_left lst ~init:SSet.empty
+        ~f:(fun s ai ->
+              if class_filter ai then
+                let ai_sel = select ai in
+                if count_homozygous_2x && SSet.mem ai_sel s then
+                  SSet.add (ai_sel ^ "2") s
+                else
+                  SSet.add (select ai) s
+              else
+                s)
+    in
+    let as_sets =
+      List.map ~f:(fun (typer, allele_lst) ->
+        let s = set_of_ailst allele_lst in
+        (typer, s)) typer_assoc
+    in
+    let sum_jacard_index =
+      fold_over_all_pairs as_sets ~init:0.
+        ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jacard s1 s2)
+    in
+    let nf = float (List.length as_sets) in
+    let num_pairs = nf *. (nf -. 1.) /. 2. in
+    sum_jacard_index /. num_pairs
+
+  let count_consecutive_doubles = function
+    | []      -> []
+    | h :: [] -> [ h, 1]
+    | h :: t  ->
+      let rec loop p c acc = function
+        | []     -> List.rev ((p, c) :: acc)
+        | h :: t when h = p -> loop p (c + 1) acc t
+        | h :: t            -> loop h 1 ((p,c) :: acc) t
+      in
+      loop h 1 [] t
+
+  let compress_counts =
+    List.map ~f:(fun (a,c) -> if c < 2 then a else sprintf "%sx%d" a c)
+
+  let group_similarities ?by_class select typer_assoc =
+    let class_filter = to_class_filter by_class in
+    List.fold_left typer_assoc ~init:SMap.empty
+      ~f:(fun m (typer, allele_lst) ->
+        List.fold_left allele_lst ~init:m ~f:(fun m ai ->
+          if not (class_filter ai) then
+            m
+          else
+            let ai_sel = select ai in
+            match SMap.find ai_sel m with
+            | lst                 -> SMap.add ai_sel (typer :: lst) m
+            | exception Not_found -> SMap.add ai_sel (typer :: []) m))
+    |> SMap.bindings
+    |> List.sort ~cmp:compare
+    |> List.map ~f:(fun (a, l) ->
+        (a, count_consecutive_doubles l |> compress_counts))
+
+  (* ?classes: Allow more than one HLA_class to do the analysis on, but default
+      to ignoring the distinction. *)
+  let output ?resolution ?classes oc nested_map_output =
+    let select = select_allele ?resolution in
+    let cmj, group, default_indent, suffix, nc =
+      match classes with
+      | None ->
+          (fun typer_assoc -> [ compute_mean_jacard select typer_assoc ])
+          , (fun typer_assoc -> [ None, group_similarities select typer_assoc ])
+          , ""
+          , "y"
+          , 1
+      | Some hla_classes ->
+          (fun typer_assoc ->
+            List.map hla_classes ~f:(fun by_class ->
+              compute_mean_jacard ~by_class select typer_assoc))
+          , (fun typer_assoc ->
+              List.map hla_classes ~f:(fun by_class ->
+                (Some (hla_class_to_string by_class ^ ":\t")
+                , group_similarities ~by_class select typer_assoc)))
+          , "\t"
+          , "ies"
+          , List.length hla_classes
+    in
+    let float_lst_to_str l = String.concat " " (List.map ~f:(sprintf "%0.2f") l) in
+    let ss, n =
+      List.fold_left nested_map_output ~init:(List.init nc ~f:(fun _ -> 0.), 0)
+        ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
+              let jc_lst = cmj typer_assoc in
+              fprintf oc "%s\tjacard similarit%s: %s\n" run suffix (float_lst_to_str jc_lst);
+              let group = group typer_assoc in
+              List.iter group ~f:(fun (cls_opt, by_cls_lst) ->
+                List.iteri by_cls_lst ~f:(fun i (a, tlst) ->
+                  let s1 =
+                    if i = 0 then Option.value ~default:default_indent cls_opt
+                    else default_indent
+                  in
+                  fprintf oc "\t%s%s\t%s\n" s1 a (String.concat ";" tlst)));
+              List.map2 ~f:(+.) jc_s jc_lst, jc_n + 1)
+    in
+    let nf = float n in
+    let avgs = List.map ~f:(fun x -> x /. nf) ss in
+    fprintf oc "Average jacard similarit%s across runs: %s\n" suffix (float_lst_to_str avgs)
+
+end (* Compare *)
+
+module Output = struct
 
   let nan_is_empty f = if f <> f then "" else sprintf "%f" f
 
