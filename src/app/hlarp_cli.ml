@@ -157,7 +157,8 @@ let () =
             & info ["l"; "loci"]
                 ~doc:"MHC loci along which to partition the similarity analysis: a string prefix.\
                       Specify a prefix that is used to group loci (ex. \"A\", \"B\", \"DRB1\", etc.).\
-                      Specify multiple loci to get separate analysis.")
+                      Specify multiple loci to get separate analysis.\
+                      This argument will supersede any class grouping arguments.")
     in
     Term.(const compare $ resolution_arg $ classes_arg $ loci_arg $ seq_arg $ opt_arg $ ath_arg
         , info "compare"
