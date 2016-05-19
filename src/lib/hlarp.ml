@@ -367,7 +367,10 @@ module Compare = struct
         (a, count_consecutive_doubles l |> compress_counts))
 
   (* ?classes: Allow more than one HLA_class to do the analysis on, but default
-      to ignoring the distinction. *)
+      to ignoring the distinction.
+     ?loci: Allow more than one HLA loci to do the analysis on, superseding
+      any classes argument, but default to ignoring the distinction. Specify
+      a string prefix that is used group alleles. *)
   let output ?resolution ?classes ?loci oc nested_map_output =
     let select = select_allele ?resolution in
     let cmj, group, default_indent, suffix, nc =
