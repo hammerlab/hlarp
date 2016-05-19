@@ -303,16 +303,17 @@ module Compare = struct
       let union = SSet.union s1 s2 |> SSet.cardinal in
       (float inter) /. (float union)
 
-  let to_class_filter = function
-    | None   -> fun _ -> true
-    | Some c -> fun ai -> ai.hla_class = c
+  let to_filter = function
+    | None                  -> fun _ -> true
+    | Some (`HLAClass c)    -> fun ai -> ai.hla_class = c
+    | Some (`LociPrefix p)  -> fun ai -> Re.execp (Re_posix.compile_pat ("^" ^ p)) ai.allele
 
-  let compute_mean_jacard ?by_class ?(count_homozygous_2x=true) select typer_assoc =
-    let class_filter = to_class_filter by_class in
+  let compute_mean_jacard ?by ?(count_homozygous_2x=true) select typer_assoc =
+    let filter = to_filter by in
     let set_of_ailst lst =
       List.fold_left lst ~init:SSet.empty
         ~f:(fun s ai ->
-              if class_filter ai then
+              if filter ai then
                 let ai_sel = select ai in
                 if count_homozygous_2x && SSet.mem ai_sel s then
                   SSet.add (ai_sel ^ "2") s
@@ -348,12 +349,12 @@ module Compare = struct
   let compress_counts =
     List.map ~f:(fun (a,c) -> if c < 2 then a else sprintf "%sx%d" a c)
 
-  let group_similarities ?by_class select typer_assoc =
-    let class_filter = to_class_filter by_class in
+  let group_similarities ?by select typer_assoc =
+    let filter = to_filter by in
     List.fold_left typer_assoc ~init:SMap.empty
       ~f:(fun m (typer, allele_lst) ->
         List.fold_left allele_lst ~init:m ~f:(fun m ai ->
-          if not (class_filter ai) then
+          if not (filter ai) then
             m
           else
             let ai_sel = select ai in
@@ -367,27 +368,42 @@ module Compare = struct
 
   (* ?classes: Allow more than one HLA_class to do the analysis on, but default
       to ignoring the distinction. *)
-  let output ?resolution ?classes oc nested_map_output =
+  let output ?resolution ?classes ?loci oc nested_map_output =
     let select = select_allele ?resolution in
     let cmj, group, default_indent, suffix, nc =
-      match classes with
-      | None ->
-          (fun typer_assoc -> [ compute_mean_jacard select typer_assoc ])
-          , (fun typer_assoc -> [ None, group_similarities select typer_assoc ])
-          , ""
-          , "y"
-          , 1
-      | Some hla_classes ->
+      match loci with
+      | Some loci_lst ->
           (fun typer_assoc ->
-            List.map hla_classes ~f:(fun by_class ->
-              compute_mean_jacard ~by_class select typer_assoc))
+            List.map loci_lst ~f:(fun loci ->
+              compute_mean_jacard ~by:(`LociPrefix loci) select typer_assoc))
           , (fun typer_assoc ->
-              List.map hla_classes ~f:(fun by_class ->
-                (Some (hla_class_to_string by_class ^ ":\t")
-                , group_similarities ~by_class select typer_assoc)))
+            List.map loci_lst ~f:(fun loci ->
+              (Some (loci ^ ":\t")
+              , group_similarities ~by:(`LociPrefix loci) select typer_assoc)))
           , "\t"
           , "ies"
-          , List.length hla_classes
+          , List.length loci_lst
+      | None ->
+          begin
+            match classes with
+            | None ->
+                (fun typer_assoc -> [ compute_mean_jacard select typer_assoc ])
+                , (fun typer_assoc -> [ None, group_similarities select typer_assoc ])
+                , ""
+                , "y"
+                , 1
+            | Some hla_classes ->
+                (fun typer_assoc ->
+                  List.map hla_classes ~f:(fun hla_class ->
+                    compute_mean_jacard ~by:(`HLAClass hla_class) select typer_assoc))
+                , (fun typer_assoc ->
+                    List.map hla_classes ~f:(fun hla_class ->
+                      (Some (hla_class_to_string hla_class ^ ":\t")
+                      , group_similarities ~by:(`HLAClass hla_class) select typer_assoc)))
+                , "\t"
+                , "ies"
+                , List.length hla_classes
+          end
     in
     let float_lst_to_str l = String.concat " " (List.map ~f:(sprintf "%0.2f") l) in
     let ss, n =
