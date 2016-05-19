@@ -367,7 +367,7 @@ module Compare = struct
 
   (* ?classes: Allow more than one HLA_class to do the analysis on, but default
       to ignoring the distinction. *)
-  let output ?resolution ?classes oc nested_map_output =
+  let output ?resolution ?classes ?loci oc nested_map_output =
     let select = select_allele ?resolution in
     let cmj, group, default_indent, suffix, nc =
       match classes with
