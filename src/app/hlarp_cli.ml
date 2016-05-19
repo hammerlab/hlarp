@@ -148,16 +148,11 @@ let () =
                         Specify multiple classes to get separate analysis.")
     in
     let loci_arg =
-      let loci_converter =
-        let parser_ s = `Ok s in
-        let printer f c = Format.fprintf f "%s" c in
-        parser_, printer
-      in
-      Arg.(value & opt_all loci_converter []
+      Arg.(value & opt_all string []
             & info ["l"; "loci"]
                 ~doc:"MHC loci along which to partition the similarity analysis: a string prefix.\
                       Specify a prefix that is used to group loci (ex. \"A\", \"B\", \"DRB1\", etc.).\
-                      Specify multiple loci to get separate analysis.\
+                      Specify multiple loci to get separate analyses.\
                       This argument will supersede any class grouping arguments.")
     in
     Term.(const compare $ resolution_arg $ classes_arg $ loci_arg $ seq_arg $ opt_arg $ ath_arg
