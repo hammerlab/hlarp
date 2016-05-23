@@ -26,10 +26,11 @@ let multiple seqlst optlst athlst do_not_prefix =
   |> List.concat
   |> Output.out_channel stdout
 
-let compare resolution classes seqlst optlst athlst =
+let compare resolution classes loci seqlst optlst athlst =
   let classes = match classes with | [] -> None | l -> Some l in
+  let loci = match loci with | [] -> None | l -> Some l in
   Compare.nested_maps seqlst optlst athlst
-  |> Compare.output ?resolution ?classes stdout
+  |> Compare.output ?resolution ?classes ?loci stdout
 
 let () =
   let open Cmdliner in
@@ -146,7 +147,15 @@ let () =
                 ~doc:"MHC class along which to partition the similarity analysis: Must be 1 or 2.\
                         Specify multiple classes to get separate analysis.")
     in
-    Term.(const compare $ resolution_arg $ classes_arg $ seq_arg $ opt_arg $ ath_arg
+    let loci_arg =
+      Arg.(value & opt_all string []
+            & info ["l"; "loci"]
+                ~doc:"MHC loci along which to partition the similarity analysis: a string prefix.\
+                      Specify a prefix that is used to group loci (ex. \"A\", \"B\", \"DRB1\", etc.).\
+                      Specify multiple loci to get separate analyses.\
+                      This argument will supersede any class grouping arguments.")
+    in
+    Term.(const compare $ resolution_arg $ classes_arg $ loci_arg $ seq_arg $ opt_arg $ ath_arg
         , info "compare"
             ~doc:"Scan multiple directories (of possibly different formats) and compare the results after aggregating on a per run basis.")
   in
