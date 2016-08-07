@@ -11,7 +11,7 @@ open Hlarp
 
 let project_name = "hlarp"
 
-let multiple seqlst optlst athlst do_not_prefix =
+let multiple seqlst optlst athlst prolst do_not_prefix =
   let p typer_name =
     if do_not_prefix then
       fun x -> x
@@ -21,15 +21,16 @@ let multiple seqlst optlst athlst do_not_prefix =
   [ List.map ~f:Seq2HLA.scan_directory seqlst |> List.map ~f:(p "seq2HLA_")
   ; List.map ~f:OptiType.scan_directory optlst |> List.map ~f:(p "OptiType_")
   ; List.map ~f:Athlates.scan_directory athlst |> List.map ~f:(p "ATHLATES_")
+  ; List.map ~f:Prohlatype.scan_directory prolst |> List.map ~f:(p "Prohlatype")
   ]
   |> List.concat
   |> List.concat
   |> Output.out_channel stdout
 
-let compare resolution classes loci seqlst optlst athlst filelst =
+let compare resolution classes loci seqlst optlst athlst prolst filelst =
   let classes = match classes with | [] -> None | l -> Some l in
   let loci = match loci with | [] -> None | l -> Some l in
-  Compare.nested_maps seqlst optlst athlst filelst
+  Compare.nested_maps seqlst optlst athlst prolst filelst
   |> Compare.output ?resolution ?classes ?loci stdout
 
 let () =
@@ -65,18 +66,14 @@ let () =
   in
   let seq2HLA =
     let tool = "seq2HLA" in
-    Term.(const (fun dir ->
-            Seq2HLA.scan_directory dir
-            |> Output.out_channel stdout)
-          $ (directory_arg ~tool ~suffix:Seq2HLA.suffix)
+    let f dir = Seq2HLA.scan_directory dir |> Output.out_channel stdout in
+    Term.(const f $ (directory_arg ~tool ~suffix:Seq2HLA.suffix)
         , info tool ~doc:"Parse seq2HLA output")
   in
   let optitype =
     let tool = "optitype" in
-    Term.(const (fun dir ->
-            OptiType.scan_directory dir
-            |> Output.out_channel stdout)
-          $ (directory_arg ~tool ~suffix:OptiType.suffix)
+    let f dir = OptiType.scan_directory dir |> Output.out_channel stdout in
+    Term.(const f $ (directory_arg ~tool ~suffix:OptiType.suffix)
         , info tool ~doc:"Parse OptiType output")
   in
   let athlates =
@@ -95,12 +92,19 @@ let () =
               ]
       )
     in
-    Term.(const (fun dir equal_pairs ->
-            Athlates.scan_directory ~equal_pairs dir
-            |> Output.out_channel stdout)
+    let f dir equal_pairs =
+      Athlates.scan_directory ~equal_pairs dir |> Output.out_channel stdout
+    in
+    Term.(const f
           $ directory_arg ~tool ~suffix:Athlates.suffix
           $ equal_pairs_flag
         , info tool ~doc:"Parse ATHLATES output")
+  in
+  let prohlatype =
+    let tool = "prohlatype" in
+    let f dir = Prohlatype.scan_directory dir |> Output.out_channel stdout in
+    Term.(const f $ directory_arg ~tool ~suffix:Prohlatype.suffix
+        , info tool ~doc:"Parse Prohlatype output")
   in
   let to_directory_arg name arg_lst =
     Arg.(value & opt_all dir []
@@ -110,12 +114,13 @@ let () =
   let seq_arg = to_directory_arg "Seq2HLA" ["s"; "seq2HLA"] in
   let opt_arg = to_directory_arg "Optitype" ["o"; "optitype"] in
   let ath_arg = to_directory_arg "ATHLATES" ["a"; "athlates"] in
+  let pro_arg = to_directory_arg "Prohlatype" ["p"; "prohlatype"] in
   let multiple =
     let pre_flg =
       Arg.(value & flag & info ["prefix"]
             ~doc:"Do NOT prefix the run information with typer name.")
     in
-    Term.(const multiple $ seq_arg $ opt_arg $ ath_arg $ pre_flg
+    Term.(const multiple $ seq_arg $ opt_arg $ ath_arg $ pro_arg $ pre_flg
         , info "multiple"
             ~doc:"Scan multiple directories (of possilby different formats) and report aggregate results.")
   in
@@ -161,12 +166,12 @@ let () =
             ~doc:"Load, parse and use for comparison a file previously written by the aggregate format.")
     in
     Term.(const compare $ resolution_arg $ classes_arg $ loci_arg
-            $ seq_arg $ opt_arg $ ath_arg
+            $ seq_arg $ opt_arg $ ath_arg $ pro_arg
             $ files_arg
         , info "compare"
             ~doc:"Scan multiple directories (of possibly different formats) and compare the results after aggregating on a per run basis.")
   in
-  let cmds = [seq2HLA; optitype; athlates; multiple; compare] in
+  let cmds = [seq2HLA; optitype; athlates; prohlatype; multiple; compare] in
   match Term.eval_choice help_cmd cmds with
   | `Ok () -> ()
   | `Error _ -> failwith "cmdliner error"
