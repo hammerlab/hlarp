@@ -263,7 +263,7 @@ module Compare = struct
     else
       fun _ -> name
 
-  let nested_maps seqlst optlst athlst =
+  let nested_maps seqlst optlst athlst filelst =
     let add_to_run_map name scan dirlst run_map =
       let prefix = to_prefix name dirlst in
       List.foldi dirlst ~init:run_map ~f:(fun i rmp dir ->
@@ -274,10 +274,44 @@ module Compare = struct
               | lst                 -> SMap.add run ((p,info_lst) :: lst) rmp
               | exception Not_found -> SMap.add run ((p,info_lst) :: []) rmp))
     in
+    let load_file file =
+      let ic = open_in file in
+      let _hdr = input_line ic in
+      let rec loop m =
+        try
+          let line = input_line ic in
+          let run, info =
+            match Re.split (Re.char ',' |> Re.compile) line with
+            | cls_s :: all_s :: qul_s :: con_s :: run_s :: [] ->
+                run_s
+                , { hla_class =
+                      if cls_s = "1" then I else
+                        if cls_s = "2" then II else
+                          invalid_arg (sprintf "unrecognized cls: %s" cls_s)
+                  ; allele = all_s
+                  ; qualifier = qul_s
+                  ; confidence = if con_s = "" then nan else float_of_string con_s
+                }
+            | _ -> invalid_arg
+                      (sprintf "can't parse Hlarp input line %s from %s"
+                        line file)
+          in
+          match SMap.find run m with
+          | lst                 -> loop (SMap.add run ((file, [info]) :: lst) m)
+          | exception Not_found -> loop (SMap.add run ((file, [info]) :: []) m)
+        with End_of_file ->
+          m
+      in
+      loop
+    in
+    let add_hlarp_files filelst run_map =
+      List.fold_left filelst ~init:run_map ~f:(fun m f -> load_file f m)
+    in
     SMap.empty
     |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
     |> add_to_run_map "OptiType" OptiType.scan_directory optlst
     |> add_to_run_map "ATHLATES" Athlates.scan_directory athlst
+    |> add_hlarp_files filelst
     |> SMap.bindings
 
   let fold_over_all_pairs ~f ~init lst =

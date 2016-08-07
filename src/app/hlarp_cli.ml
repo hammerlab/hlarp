@@ -26,10 +26,10 @@ let multiple seqlst optlst athlst do_not_prefix =
   |> List.concat
   |> Output.out_channel stdout
 
-let compare resolution classes loci seqlst optlst athlst =
+let compare resolution classes loci seqlst optlst athlst filelst =
   let classes = match classes with | [] -> None | l -> Some l in
   let loci = match loci with | [] -> None | l -> Some l in
-  Compare.nested_maps seqlst optlst athlst
+  Compare.nested_maps seqlst optlst athlst filelst
   |> Compare.output ?resolution ?classes ?loci stdout
 
 let () =
@@ -155,7 +155,14 @@ let () =
                       Specify multiple loci to get separate analyses.\
                       This argument will supersede any class grouping arguments.")
     in
-    Term.(const compare $ resolution_arg $ classes_arg $ loci_arg $ seq_arg $ opt_arg $ ath_arg
+    let files_arg =
+      Arg.(value & opt_all file []
+          & info ["hlarp-file"] ~docv:"Hlarp output file"
+            ~doc:"Load, parse and use for comparison a file previously written by the aggregate format.")
+    in
+    Term.(const compare $ resolution_arg $ classes_arg $ loci_arg
+            $ seq_arg $ opt_arg $ ath_arg
+            $ files_arg
         , info "compare"
             ~doc:"Scan multiple directories (of possibly different formats) and compare the results after aggregating on a per run basis.")
   in
