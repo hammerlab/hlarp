@@ -249,8 +249,64 @@ module Athlates = struct
     |> join_by_fst
     |> List.sort ~cmp:compare  (* sort by keys aka runs *)
 
-
 end (* Athlates *)
+
+module Prohlatype = struct
+
+  let suffix = ".txt"
+  let filename_regex = Re_posix.compile_pat ("([^/]+)/([^/]+)_[^/]+_(nuc|gen)" ^ suffix)
+
+  let allele_to_hla_class s =
+    if String.get s 0 = 'D' then II else I
+
+  let parse (fname, re_group) =
+    let run = Re.Group.get re_group 2 in
+    let ic = open_in fname in
+    let rec loop acc =
+      try
+        let line = input_line ic in
+        let confidence, allele = Scanf.sscanf line "%f\t%s" (fun c a -> (c, a)) in
+        let info =
+          { hla_class = allele_to_hla_class allele
+          ; qualifier = ""
+          ; allele
+          ; confidence
+          }
+        in
+        loop (info :: acc)
+      with End_of_file -> acc
+    in
+    let ilst =
+      try loop []
+      with e ->
+        Printf.eprintf "dropping %s because of %s\n" fname (Printexc.to_string e);
+        []
+    in
+    run, ilst
+
+  let scan_directory dir =
+    let rec loop acc = function
+      | [] -> acc
+      | dir :: t ->
+        let matches, dirs =
+          Sys.readdir dir
+          |> Array.fold_left ~init:([],[]) ~f:(fun (ms, ds) f ->
+                let df = Filename.concat dir f in
+                if Sys.is_directory df then
+                  ms, df :: ds
+                else
+                  match Re.exec_opt filename_regex df with
+                  | None    -> ms, ds
+                  | Some m  -> (df, m) :: ms, ds)
+        in
+        loop (matches @ acc) (dirs @ t)
+    in
+    loop [] [dir]
+    |> List.map ~f:parse
+    |> join_by_fst
+    |> List.sort ~cmp:compare
+
+end (* Prohlatype *)
 
 module Compare = struct
 
@@ -263,7 +319,7 @@ module Compare = struct
     else
       fun _ -> name
 
-  let nested_maps seqlst optlst athlst filelst =
+  let nested_maps seqlst optlst athlst prolst filelst =
     let add_to_run_map name scan dirlst run_map =
       let prefix = to_prefix name dirlst in
       List.foldi dirlst ~init:run_map ~f:(fun i rmp dir ->
@@ -297,20 +353,26 @@ module Compare = struct
                         line file)
           in
           match SMap.find run m with
-          | lst                 -> loop (SMap.add run ((file, [info]) :: lst) m)
-          | exception Not_found -> loop (SMap.add run ((file, [info]) :: []) m)
+          | (f, lst) when f = file -> loop (SMap.add run (file, info :: lst) m)
+          | exception Not_found    -> loop (SMap.add run (file, info :: []) m)
+          | (nf, _)                ->
+              invalid_arg (sprintf "encountered another file %s while parsing: %s" nf file)
         with End_of_file ->
           m
       in
-      loop
+      loop SMap.empty
     in
     let add_hlarp_files filelst run_map =
-      List.fold_left filelst ~init:run_map ~f:(fun m f -> load_file f m)
+      List.fold_left filelst ~init:run_map ~f:(fun m file ->
+        let fm = load_file file in
+        let fmm = SMap.map (fun fl -> fl :: []) fm in
+        SMap.union (fun _run l1 l2 -> Some (l1 @ l2)) m fmm)
     in
     SMap.empty
     |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
     |> add_to_run_map "OptiType" OptiType.scan_directory optlst
     |> add_to_run_map "ATHLATES" Athlates.scan_directory athlst
+    |> add_to_run_map "Prohlatype" Prohlatype.scan_directory prolst
     |> add_hlarp_files filelst
     |> SMap.bindings
 
@@ -329,9 +391,13 @@ module Compare = struct
     | Some n -> List.take (Re.split colon_regex ai.allele) n
                 |> String.concat ":"
 
-  let jacard s1 s2 =
-    if SSet.is_empty s1 && SSet.is_empty s2 then
+  let jaccard ?(zero_on_empty=true) s1 s2 =
+    let n1 = SSet.cardinal s1 in
+    let n2 = SSet.cardinal s2 in
+    if n1 = 0 && n2 = 0 then
       1.
+    else if zero_on_empty && (n1 = 0 || n2 = 0) then
+      0.
     else
       let inter = SSet.inter s1 s2 |> SSet.cardinal in
       let union = SSet.union s1 s2 |> SSet.cardinal in
@@ -342,7 +408,7 @@ module Compare = struct
     | Some (`HLAClass c)    -> fun ai -> ai.hla_class = c
     | Some (`LociPrefix p)  -> fun ai -> Re.execp (Re_posix.compile_pat ("^" ^ p)) ai.allele
 
-  let compute_mean_jacard ?by ?(count_homozygous_2x=true) select typer_assoc =
+  let compute_mean_jaccard ?by ?(count_homozygous_2x=true) select typer_assoc =
     let filter = to_filter by in
     let set_of_ailst lst =
       List.fold_left lst ~init:SSet.empty
@@ -361,13 +427,13 @@ module Compare = struct
         let s = set_of_ailst allele_lst in
         (typer, s)) typer_assoc
     in
-    let sum_jacard_index =
+    let sum_jaccard_index =
       fold_over_all_pairs as_sets ~init:0.
-        ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jacard s1 s2)
+        ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jaccard s1 s2)
     in
     let nf = float (List.length as_sets) in
     let num_pairs = nf *. (nf -. 1.) /. 2. in
-    sum_jacard_index /. num_pairs
+    sum_jaccard_index /. num_pairs
 
   let count_consecutive_doubles = function
     | []      -> []
@@ -412,7 +478,7 @@ module Compare = struct
       | Some loci_lst ->
           (fun typer_assoc ->
             List.map loci_lst ~f:(fun loci ->
-              compute_mean_jacard ~by:(`LociPrefix loci) select typer_assoc))
+              compute_mean_jaccard ~by:(`LociPrefix loci) select typer_assoc))
           , (fun typer_assoc ->
             List.map loci_lst ~f:(fun loci ->
               (Some (loci ^ ":\t")
@@ -424,7 +490,7 @@ module Compare = struct
           begin
             match classes with
             | None ->
-                (fun typer_assoc -> [ compute_mean_jacard select typer_assoc ])
+                (fun typer_assoc -> [ compute_mean_jaccard select typer_assoc ])
                 , (fun typer_assoc -> [ None, group_similarities select typer_assoc ])
                 , ""
                 , "y"
@@ -432,7 +498,7 @@ module Compare = struct
             | Some hla_classes ->
                 (fun typer_assoc ->
                   List.map hla_classes ~f:(fun hla_class ->
-                    compute_mean_jacard ~by:(`HLAClass hla_class) select typer_assoc))
+                    compute_mean_jaccard ~by:(`HLAClass hla_class) select typer_assoc))
                 , (fun typer_assoc ->
                     List.map hla_classes ~f:(fun hla_class ->
                       (Some (hla_class_to_string hla_class ^ ":\t")
@@ -447,7 +513,7 @@ module Compare = struct
       List.fold_left nested_map_output ~init:(List.init nc ~f:(fun _ -> 0.), 0)
         ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
               let jc_lst = cmj typer_assoc in
-              fprintf oc "%s\tjacard similarit%s: %s\n" run suffix (float_lst_to_str jc_lst);
+              fprintf oc "%s\tjaccard similarit%s: %s\n" run suffix (float_lst_to_str jc_lst);
               let group = group typer_assoc in
               List.iter group ~f:(fun (cls_opt, by_cls_lst) ->
                 List.iteri by_cls_lst ~f:(fun i (a, tlst) ->
@@ -460,7 +526,7 @@ module Compare = struct
     in
     let nf = float n in
     let avgs = List.map ~f:(fun x -> x /. nf) ss in
-    fprintf oc "Average jacard similarit%s across runs: %s\n" suffix (float_lst_to_str avgs)
+    fprintf oc "Average jaccard similarit%s across runs: %s\n" suffix (float_lst_to_str avgs)
 
 end (* Compare *)
 
