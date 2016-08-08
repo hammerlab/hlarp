@@ -353,15 +353,20 @@ module Compare = struct
                         line file)
           in
           match SMap.find run m with
-          | lst                 -> loop (SMap.add run ((file, [info]) :: lst) m)
-          | exception Not_found -> loop (SMap.add run ((file, [info]) :: []) m)
+          | (f, lst) when f = file -> loop (SMap.add run (file, info :: lst) m)
+          | exception Not_found    -> loop (SMap.add run (file, info :: []) m)
+          | (nf, _)                ->
+              invalid_arg (sprintf "encountered another file %s while parsing: %s" nf file)
         with End_of_file ->
           m
       in
-      loop
+      loop SMap.empty
     in
     let add_hlarp_files filelst run_map =
-      List.fold_left filelst ~init:run_map ~f:(fun m f -> load_file f m)
+      List.fold_left filelst ~init:run_map ~f:(fun m file ->
+        let fm = load_file file in
+        let fmm = SMap.map (fun fl -> fl :: []) fm in
+        SMap.union (fun _run l1 l2 -> Some (l1 @ l2)) m fmm)
     in
     SMap.empty
     |> add_to_run_map "seq2HLA"  Seq2HLA.scan_directory seqlst
