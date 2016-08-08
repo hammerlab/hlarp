@@ -386,9 +386,13 @@ module Compare = struct
     | Some n -> List.take (Re.split colon_regex ai.allele) n
                 |> String.concat ":"
 
-  let jacard s1 s2 =
-    if SSet.is_empty s1 && SSet.is_empty s2 then
+  let jacard ?(zero_on_empty=true) s1 s2 =
+    let n1 = SSet.cardinal s1 in
+    let n2 = SSet.cardinal s2 in
+    if n1 = 0 && n2 = 0 then
       1.
+    else if zero_on_empty && (n1 = 0 || n2 = 0) then
+      0.
     else
       let inter = SSet.inter s1 s2 |> SSet.cardinal in
       let union = SSet.union s1 s2 |> SSet.cardinal in
