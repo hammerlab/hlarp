@@ -391,7 +391,7 @@ module Compare = struct
     | Some n -> List.take (Re.split colon_regex ai.allele) n
                 |> String.concat ":"
 
-  let jacard ?(zero_on_empty=true) s1 s2 =
+  let jaccard ?(zero_on_empty=true) s1 s2 =
     let n1 = SSet.cardinal s1 in
     let n2 = SSet.cardinal s2 in
     if n1 = 0 && n2 = 0 then
@@ -408,7 +408,7 @@ module Compare = struct
     | Some (`HLAClass c)    -> fun ai -> ai.hla_class = c
     | Some (`LociPrefix p)  -> fun ai -> Re.execp (Re_posix.compile_pat ("^" ^ p)) ai.allele
 
-  let compute_mean_jacard ?by ?(count_homozygous_2x=true) select typer_assoc =
+  let compute_mean_jaccard ?by ?(count_homozygous_2x=true) select typer_assoc =
     let filter = to_filter by in
     let set_of_ailst lst =
       List.fold_left lst ~init:SSet.empty
@@ -427,13 +427,13 @@ module Compare = struct
         let s = set_of_ailst allele_lst in
         (typer, s)) typer_assoc
     in
-    let sum_jacard_index =
+    let sum_jaccard_index =
       fold_over_all_pairs as_sets ~init:0.
-        ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jacard s1 s2)
+        ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jaccard s1 s2)
     in
     let nf = float (List.length as_sets) in
     let num_pairs = nf *. (nf -. 1.) /. 2. in
-    sum_jacard_index /. num_pairs
+    sum_jaccard_index /. num_pairs
 
   let count_consecutive_doubles = function
     | []      -> []
@@ -478,7 +478,7 @@ module Compare = struct
       | Some loci_lst ->
           (fun typer_assoc ->
             List.map loci_lst ~f:(fun loci ->
-              compute_mean_jacard ~by:(`LociPrefix loci) select typer_assoc))
+              compute_mean_jaccard ~by:(`LociPrefix loci) select typer_assoc))
           , (fun typer_assoc ->
             List.map loci_lst ~f:(fun loci ->
               (Some (loci ^ ":\t")
@@ -490,7 +490,7 @@ module Compare = struct
           begin
             match classes with
             | None ->
-                (fun typer_assoc -> [ compute_mean_jacard select typer_assoc ])
+                (fun typer_assoc -> [ compute_mean_jaccard select typer_assoc ])
                 , (fun typer_assoc -> [ None, group_similarities select typer_assoc ])
                 , ""
                 , "y"
@@ -498,7 +498,7 @@ module Compare = struct
             | Some hla_classes ->
                 (fun typer_assoc ->
                   List.map hla_classes ~f:(fun hla_class ->
-                    compute_mean_jacard ~by:(`HLAClass hla_class) select typer_assoc))
+                    compute_mean_jaccard ~by:(`HLAClass hla_class) select typer_assoc))
                 , (fun typer_assoc ->
                     List.map hla_classes ~f:(fun hla_class ->
                       (Some (hla_class_to_string hla_class ^ ":\t")
@@ -513,7 +513,7 @@ module Compare = struct
       List.fold_left nested_map_output ~init:(List.init nc ~f:(fun _ -> 0.), 0)
         ~f:(fun (jc_s, jc_n) (run, typer_assoc) ->
               let jc_lst = cmj typer_assoc in
-              fprintf oc "%s\tjacard similarit%s: %s\n" run suffix (float_lst_to_str jc_lst);
+              fprintf oc "%s\tjaccard similarit%s: %s\n" run suffix (float_lst_to_str jc_lst);
               let group = group typer_assoc in
               List.iter group ~f:(fun (cls_opt, by_cls_lst) ->
                 List.iteri by_cls_lst ~f:(fun i (a, tlst) ->
@@ -526,7 +526,7 @@ module Compare = struct
     in
     let nf = float n in
     let avgs = List.map ~f:(fun x -> x /. nf) ss in
-    fprintf oc "Average jacard similarit%s across runs: %s\n" suffix (float_lst_to_str avgs)
+    fprintf oc "Average jaccard similarit%s across runs: %s\n" suffix (float_lst_to_str avgs)
 
 end (* Compare *)
 
