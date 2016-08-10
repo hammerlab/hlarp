@@ -17,5 +17,5 @@ depends: [
   "ocamlbuild" {build}
   "cmdliner"
   "nonstd"
-  "re"
+  "re" {>= "1.5.0"}
 ]
