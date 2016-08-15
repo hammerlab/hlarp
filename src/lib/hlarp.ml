@@ -11,7 +11,7 @@ let join_by_fst lst =
         ~init:StringMap.empty
   |> StringMap.bindings
 
-let float_of_string_nanable s = try float_of_string s with _ -> nan
+let float_of_string_nanable s = try float_of_string s with Failure _ -> nan
 
 type hla_class = | I | II
 
@@ -186,17 +186,17 @@ module Athlates = struct
           loop true acc
         else if found_header && line <> "" then
           let a1, a2 =
-            Scanf.sscanf line "%s\t\t%s\t\t%f"
+            Scanf.sscanf line "%s\t\t%s\t\t%s"
               (fun allele1 allele2 confidence ->
                 { hla_class  = allele_to_hla_class allele1
                 ; allele     = allele1
                 ; qualifier  = ""
-                ; confidence
+                ; confidence = float_of_string_nanable confidence
                 },
                 { hla_class  = allele_to_hla_class allele2
                 ; allele     = allele2
                 ; qualifier  = ""
-                ; confidence
+                ; confidence = float_of_string_nanable confidence
                 })
           in
           loop true (a1 :: a2 :: acc)
@@ -267,12 +267,12 @@ module Prohlatype = struct
     let rec loop acc =
       try
         let line = input_line ic in
-        let confidence, allele = Scanf.sscanf line "%f\t%s" (fun c a -> (c, a)) in
+        let confidence, allele = Scanf.sscanf line "%s\t%s" (fun c a -> (c, a)) in
         let info =
           { hla_class = allele_to_hla_class allele
           ; qualifier = ""
           ; allele
-          ; confidence
+          ; confidence = float_of_string_nanable confidence
           }
         in
         loop (info :: acc)
@@ -348,7 +348,7 @@ module Compare = struct
                           invalid_arg (sprintf "unrecognized cls: %s" cls_s)
                   ; allele = all_s
                   ; qualifier = qul_s
-                  ; confidence = if con_s = "" then nan else float_of_string con_s
+                  ; confidence = float_of_string_nanable con_s
                 }
             | _ -> invalid_arg
                       (sprintf "can't parse Hlarp input line %s from %s"
