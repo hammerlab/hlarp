@@ -11,6 +11,8 @@ let join_by_fst lst =
         ~init:StringMap.empty
   |> StringMap.bindings
 
+let float_of_string_nanable s = try float_of_string s with _ -> nan
+
 type hla_class = | I | II
 
 let hla_class_to_string = function | I -> "1" | II -> "2"
@@ -57,17 +59,17 @@ module Seq2HLA = struct
       let rec loop acc =
         try
           let a1, a2 =
-            Scanf.sscanf (input_line ic) "%s\t%s\t%f\t%s\t%f"
+            Scanf.sscanf (input_line ic) "%s\t%s\t%s\t%s\t%s"
               (fun _locus allele1 conf1 allele2 conf2 ->
                  { hla_class  = cls
                  ; allele     = allele1
                  ; qualifier  = ""
-                 ; confidence = conf1
+                 ; confidence = float_of_string_nanable conf1
                  },
                  { hla_class  = cls
                  ; allele     = allele2
                  ; qualifier  = ""
-                 ; confidence = conf2
+                 ; confidence = float_of_string_nanable conf2
                  })
           in
           loop (a2 :: a1 :: acc)
