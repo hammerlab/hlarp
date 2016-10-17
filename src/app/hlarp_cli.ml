@@ -4,10 +4,8 @@ class,allele,qualifier,confidence
 1,HLA-A*02:01,G,0.9
 *)
 
-open Nonstd
-open Printf
-
 open Hlarp
+open Std
 
 let project_name = "hlarp"
 
