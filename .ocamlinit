@@ -5,4 +5,4 @@
 #require "cmdliner"
 
 #directory "_build/src/lib"
-#load_rec "hlarp.cmo"
+#load_rec "hlarp.cma"
