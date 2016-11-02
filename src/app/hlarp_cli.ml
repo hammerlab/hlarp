@@ -25,11 +25,14 @@ let multiple seqlst optlst athlst prolst do_not_prefix =
   |> List.concat
   |> Output.out_channel stdout
 
-let compare resolution classes loci seqlst optlst athlst prolst filelst =
+let compare resolution classes loci max_allele_rows_to_print metrics summary_by
+  (* Input *)
+  seqlst optlst athlst prolst filelst =
   let classes = match classes with | [] -> None | l -> Some l in
   let loci = match loci with | [] -> None | l -> Some l in
-  Compare.nested_maps seqlst optlst athlst prolst filelst
-  |> Compare.output ?resolution ?classes ?loci stdout
+  let nmp  = Compare.nested_maps ~seqlst ~optlst ~athlst ~prolst ~filelst () in
+  let azo  = Compare.analyze_samples ?loci ?resolution ?classes ~metrics nmp in
+  Compare.output ?max_allele_rows_to_print ~summary_by stdout azo
 
 let () =
   let open Cmdliner in
@@ -160,10 +163,33 @@ let () =
     in
     let files_arg =
       Arg.(value & opt_all file []
-          & info ["hlarp-file"] ~docv:"Hlarp output file"
+          & info ["hlarp-file"] ~docv:"FILE"
             ~doc:"Load, parse and use for comparison a file previously written by the aggregate format.")
     in
+    let max_allele_rows_to_print_arg =
+      Arg.(value & opt (some int) None
+          & info ["max-allele-rows-to-print"]
+              ~docv:"NON NEGATIVE INTEGER"
+              ~doc:"The number of per sample per comparison alleles to \
+                    display. Defaults to 0")
+    in
+    let metrics_flag =
+      Arg.(value & vflag_all [`Jaccard]
+        [ `Jaccard, info ~doc:"Jaccard similarity" ["jaccard"]
+        ; `KLDiv,   info ~doc:"Kullbeck Leibler divergence" ["kldiv"]
+        ])
+    in
+    let summary_by_arg =
+      Arg.(value & vflag `Mean
+        [ `Mean,    info ~doc:"Report the mean across samples by comparison." ["mean-summary"]
+        ; `Median,  info ~doc:"Report the median across samples by comparison." ["median-summary"]
+        ])
+    in
     Term.(const compare $ resolution_arg $ classes_arg $ loci_arg
+            $ max_allele_rows_to_print_arg
+            $ metrics_flag
+            $ summary_by_arg
+            (* Input *)
             $ seq_arg $ opt_arg $ ath_arg $ pro_arg
             $ files_arg
         , info "compare"

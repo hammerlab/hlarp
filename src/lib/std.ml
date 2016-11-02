@@ -34,3 +34,5 @@ let info_to_string { hla_class; allele; qualifier; confidence} =
     allele qualifier confidence
 
 module InfoMap = Map.Make (struct type t = info let compare = compare end)
+
+type sample = string
