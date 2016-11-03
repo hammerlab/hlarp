@@ -284,53 +284,55 @@ let output_aggregates ?(summary_by=`Mean) oc smpl_width widths analyze_samples_o
 
 let output ?(max_allele_rows_to_print=max_int) ?summary_by oc analyze_samples_output =
   let fst_smpl, fst_assoc = List.hd_exn analyze_samples_output in
-  let join_allele_str (a, lst) =
-    sprintf "%s: %s" a (String.concat "," lst)
-  in
-  let widths =
-    List.map ~f:(fun (s, r) ->
-      List.fold_left r.grouped_view ~init:(0, String.length s)
-        ~f:(fun (c, x) al ->
-              if c > max_allele_rows_to_print then
-                (c + 1, x)
-              else
-                (c + 1, max x (String.length (join_allele_str al))))
-      |> snd) fst_assoc
-  in
-  let smpl_width = max (String.length "sample") (String.length fst_smpl + 2) in
-  let sep = "\t" in
-  let row_printer comp_assoc =
-    List.map2 ~f:(fun w (s, _) -> sprintf "%*s" w s) widths comp_assoc
-    |> String.concat sep
-    |> fprintf oc "%s\n"
-  in
-  let value_row_printer comp_assoc =
-    List.map2 ~f:(fun w (_, m) ->
-      sprintf "%-*s" w (float_lst_to_str ~sep:", " m.metrics_eval)) widths comp_assoc
-    |> String.concat sep
-    |> fprintf oc "%s\n"
-  in
-  let setup_sub_row =
-    List.map ~f:(fun (_, m) -> List.length m.grouped_view, m.grouped_view)
-  in
-  let sub_row_printer ssr row =
-   List.map2 ~f:(fun w (ng, gv) ->
-      if row < ng then
-        sprintf "%*s" w (join_allele_str (List.nth_exn gv row))
-      else
-        sprintf "%*s" w " ") widths ssr
-    |> String.concat sep
-    |> fprintf oc "%s\n"
-  in
-  fprintf oc "%-*s" smpl_width "sample" ;
-  row_printer fst_assoc;
-  List.iter analyze_samples_output ~f:(fun (sample, comp_assoc) ->
-    fprintf oc "%-*s " smpl_width sample;
-    value_row_printer comp_assoc;
-    let sub_rows = setup_sub_row comp_assoc in
-    let mx_rows = List.fold_left ~init:min_int ~f:(fun x (r, _) -> max x r) sub_rows in
-    for r = 0 to (min max_allele_rows_to_print mx_rows) - 1 do
-      fprintf oc "%*s " smpl_width " ";
-      sub_row_printer sub_rows r
-    done);
-  output_aggregates oc smpl_width widths ?summary_by analyze_samples_output
+  if fst_assoc = [] then fprintf oc "No comparisons\n" else
+    let join_allele_str (a, lst) =
+      sprintf "%s: %s" a (String.concat "," lst)
+    in
+    let widths =
+      List.map ~f:(fun (s, r) ->
+        List.fold_left r.grouped_view ~init:(0, String.length s)
+          ~f:(fun (c, x) al ->
+                if c > max_allele_rows_to_print then
+                  (c + 1, x)
+                else
+                  (c + 1, max x (String.length (join_allele_str al))))
+        |> snd) fst_assoc
+    in
+    let smpl_width = max (String.length "sample") (String.length fst_smpl + 2) in
+    let sep = "\t" in
+    let row_printer comp_assoc =
+      List.map2 ~f:(fun w (s, _) -> sprintf "%*s" w s) widths comp_assoc
+      |> String.concat sep
+      |> fprintf oc "%s\n"
+    in
+    let value_row_printer comp_assoc =
+      List.map2 ~f:(fun w (_, m) ->
+        sprintf "%-*s" w (float_lst_to_str ~sep:", " m.metrics_eval)) widths comp_assoc
+      |> String.concat sep
+      |> fprintf oc "%s\n"
+    in
+    let setup_sub_row =
+      List.map ~f:(fun (_, m) -> List.length m.grouped_view, m.grouped_view)
+    in
+    let sub_row_printer ssr row =
+    List.map2 ~f:(fun w (ng, gv) ->
+        if row < ng then
+          sprintf "%*s" w (join_allele_str (List.nth_exn gv row))
+        else
+          sprintf "%*s" w " ") widths ssr
+      |> String.concat sep
+      |> fprintf oc "%s\n"
+    in
+    fprintf oc "%-*s" smpl_width "sample" ;
+    row_printer fst_assoc;
+    List.iter analyze_samples_output ~f:(fun (sample, comp_assoc) ->
+      fprintf oc "%-*s " smpl_width sample;
+      value_row_printer comp_assoc;
+      let sub_rows = setup_sub_row comp_assoc in
+      let mx_rows = List.fold_left ~init:min_int ~f:(fun x (r, _) -> max x r) sub_rows in
+      let num_rows = min max_allele_rows_to_print mx_rows - 1 in
+      for r = 0 to num_rows do
+        fprintf oc "%*s " smpl_width " ";
+        sub_row_printer sub_rows r
+      done);
+    output_aggregates oc smpl_width widths ?summary_by analyze_samples_output
