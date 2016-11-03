@@ -112,10 +112,10 @@ let () =
         & info arg_lst ~docv:"DIR"
             ~doc:(sprintf "Directory to search for %s output (repeatable)." name))
   in
-  let seq_arg = to_directory_arg "Seq2HLA" ["s"; "seq2HLA"] in
-  let opt_arg = to_directory_arg "Optitype" ["o"; "optitype"] in
-  let ath_arg = to_directory_arg "ATHLATES" ["a"; "athlates"] in
-  let pro_arg = to_directory_arg "Prohlatype" ["p"; "prohlatype"] in
+  let seq_arg = to_directory_arg "Seq2HLA" [ Compare.seq2hl_file_arg ] in
+  let opt_arg = to_directory_arg "Optitype" [ Compare.optitype_file_arg ] in
+  let ath_arg = to_directory_arg "ATHLATES" [ Compare.athlates_file_arg ] in
+  let pro_arg = to_directory_arg "Prohlatype" [ Compare.prohlatype_file_arg ] in
   let multiple =
     let pre_flg =
       Arg.(value & flag & info ["prefix"]
@@ -163,7 +163,7 @@ let () =
     in
     let files_arg =
       Arg.(value & opt_all file []
-          & info ["hlarp-file"] ~docv:"FILE"
+          & info [ Compare.hlarp_file_arg ] ~docv:"FILE"
             ~doc:"Load, parse and use for comparison a file previously written by the aggregate format.")
     in
     let max_allele_rows_to_print_arg =
