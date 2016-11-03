@@ -278,10 +278,12 @@ let to_metric = function
         let p = normalize (sum_confidence asc1) asc1 in
         let q = normalize (sum_confidence asc2) asc2 in
         try
-          Statistics.Measures.discrete_kl_divergence ~p ~q
+          Statistics.Measures.discrete_kl_divergence ~d:1e-10 ~p ~q ()
         with (Invalid_argument m) ->
-          eprintf "%s returning infinity. p %s vs q %s\n" m
+          eprintf "%s returning infinity. p: %0.20f %s vs q: %0.20f %s\n" m
+            (List.map p ~f:snd |> Array.of_list |> Util.Array.sumf)
             (String.concat ";" (List.map p ~f:(fun (s, c) -> sprintf "%s:%0.2f" s c)))
+            (List.map q ~f:snd |> Array.of_list |> Util.Array.sumf)
             (String.concat ";" (List.map q ~f:(fun (s, c) -> sprintf "%s:%0.2f" s c))) ;
           infinity
 
