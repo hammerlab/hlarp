@@ -175,9 +175,10 @@ let specific_grouped_view ~typer1 ~ilist1 ~typer2 ~ilist2 =
   List.fold_left ilist1 ~init:AlleleMap.empty ~f:(to_fold typer1)
   |> fun m -> List.fold_left ilist2 ~init:m ~f:(to_fold typer2)
   |> AlleleMap.bindings
-  |> List.sort ~cmp:compare
   |> List.map ~f:(fun (a, l) ->
       (a, count_consecutive_doubles l |> compress_counts))
+  |> List.sort ~cmp:(fun (_a1, s1) (_a2, s2) ->
+      -1 * compare (List.length s1) (List.length s2))
 
 let against_all_pairs eval nested_map_bindings =
   List.map nested_map_bindings ~f:(fun (sample, type_assoc) ->
