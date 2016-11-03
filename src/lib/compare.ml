@@ -265,7 +265,10 @@ let output_aggregates ?(summary_by=`Mean) oc smpl_width widths analyze_samples_o
         List.map2 acc metrics_eval ~f:(fun lst v -> v :: lst)))
   in
   let open Oml.Statistics.Descriptive in
-  fprintf oc "%-*s" smpl_width " ";
+  fprintf oc "%-*s" smpl_width
+    (match summary_by with
+      | `Mean -> "mean"
+      | `Median -> "median");
   List.map2 widths all_metrics ~f:(fun w lst ->
     let reduced =
       List.map lst ~f:(fun mtrlst ->
