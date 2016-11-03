@@ -137,12 +137,21 @@ let count_consecutive_doubles = function
 let compress_counts =
   List.map ~f:(fun (a,c) -> if c < 2 then a else sprintf "%sx%d" a c)
 
-let specific_grouped_view ~typer1 ~ilist1 ~typer2 ~ilist2 =
+let loci_class_filters loci classes =
+  match loci, classes with
+  | Some loci, _              -> List.map loci ~f:(loci_prefix_filter)
+  | None,      None           -> [ fun _ -> true ]
+  | None,      (Some classes) -> List.map classes ~f:(hla_class_filter)
+
+let specific_grouped_view ?loci ?classes ~typer1 ~ilist1 ~typer2 ~ilist2 =
+  let filters = loci_class_filters loci classes in
+  let pass_filters aiv = List.exists filters ~f:(fun f -> f aiv) in
   let to_fold typer =
-    fun m (ai, _v) ->
-      match AlleleMap.find ai m with
-      | lst                 -> AlleleMap.add ai (typer :: lst) m
-      | exception Not_found -> AlleleMap.add ai (typer :: []) m
+    fun m (aik, aiv) ->
+      if not (pass_filters aiv) then m else
+        match AlleleMap.find aik m with
+        | lst                 -> AlleleMap.add aik (typer :: lst) m
+        | exception Not_found -> AlleleMap.add aik (typer :: []) m
   in
   List.fold_left ilist1 ~init:AlleleMap.empty ~f:(to_fold typer1)
   |> fun m -> List.fold_left ilist2 ~init:m ~f:(to_fold typer2)
@@ -167,12 +176,7 @@ type comparison =
   }
 
 let args_to_projections ?loci ?classes mlst spec_gv data =
-  let projects =
-    match loci, classes with
-    | Some loci, _              -> List.map loci ~f:(loci_prefix_filter)
-    | None,      None           -> [ fun _ -> true ]
-    | None,      (Some classes) -> List.map classes ~f:(hla_class_filter)
-  in
+  let projects = loci_class_filters loci classes in
   let eval ((_t1, ilist1) as itassoc1) ((_t2, ilist2) as itassoc2) =
     { metrics_eval=
         List.map projects ~f:(fun fltr ->
@@ -241,7 +245,8 @@ let analyze_samples ?loci ?classes ?resolution ?count_homozygous_2x ?(metrics=[`
             mtr ilist1 ilist2)
     in
     let spgv ~itassoc1:(typer1, ilist1) ~itassoc2:(typer2, ilist2) =
-      specific_grouped_view ~typer1 ~ilist1:(ilist_map ilist1) ~typer2 ~ilist2:(ilist_map ilist2)
+      specific_grouped_view ?loci ?classes
+        ~typer1 ~ilist1:(ilist_map ilist1) ~typer2 ~ilist2:(ilist_map ilist2)
     in
     args_to_projections ?loci ?classes metricsf spgv nested_map_bindings
 
