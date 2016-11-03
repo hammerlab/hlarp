@@ -210,9 +210,9 @@ let normalize sum assoc =
   let open Oml in
   if Util.is_degenerate sum || sum = 0. then
     let oon = 1. /. (float (List.length assoc)) in
-      List.map ~f:(fun (k, _) -> k, oon) assoc
-    else
-      List.map ~f:(fun (k, ai) -> k, ai.confidence /. sum) assoc
+    List.map ~f:(fun (k, _) -> k, oon) assoc
+  else
+    List.map ~f:(fun (k, ai) -> k, ai.confidence /. sum) assoc
 
 let to_metric = function
   | `Jaccard ->
@@ -225,8 +225,10 @@ let to_metric = function
         try
           Statistics.Measures.discrete_kl_divergence ~p ~q
         with (Invalid_argument m) ->
-          eprintf "%s returning nan\n" m;
-          nan
+          eprintf "%s returning infinity. p %s vs q %s\n" m
+            (String.concat ";" (List.map p ~f:(fun (s, c) -> sprintf "%s:%0.2f" s c)))
+            (String.concat ";" (List.map q ~f:(fun (s, c) -> sprintf "%s:%0.2f" s c))) ;
+          infinity
 
 (* ?classes: Allow more than one HLA_class to do the analysis on, but default
     to ignoring the distinction.
