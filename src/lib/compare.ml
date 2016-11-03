@@ -346,7 +346,7 @@ let output ?(max_allele_rows_to_print=max_int) ?summary_by oc analyze_samples_ou
     value_row_printer comp_assoc;
     let sub_rows = setup_sub_row comp_assoc in
     let mx_rows = List.fold_left ~init:min_int ~f:(fun x (r, _) -> max x r) sub_rows in
-    for r = 0 to mx_rows - 1 do
+    for r = 0 to (min max_allele_rows_to_print mx_rows) - 1 do
       fprintf oc "%*s " smpl_width " ";
       sub_row_printer sub_rows r
     done);
