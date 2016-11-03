@@ -123,34 +123,6 @@ let loci_prefix_filter p ai =
 let hla_class_filter c ai =
   ai.hla_class = c
 
-  (*
-let compute_mean_jaccard ?by ?(count_homozygous_2x=true) select typer_assoc =
-  let filter = to_filter by in
-  let set_of_ailst =
-    List.fold_left ~init:AlleleSet.empty ~f:(fun s ai ->
-      if filter ai then
-        let ai_sel = select ai in
-        if count_homozygous_2x && AlleleSet.mem ai_sel s then
-          AlleleSet.add (ai_sel ^ "2") s
-        else
-          AlleleSet.add ai_sel s
-      else
-        s)
-  in
-  let as_sets =
-    List.map ~f:(fun (typer, allele_lst) ->
-      let s = set_of_ailst allele_lst in
-      (typer, s)) typer_assoc
-  in
-  let sum_jaccard_index =
-    list_fold_over_all_pairs as_sets ~init:0.
-      ~f:(fun s ((_t1,s1), (_t2,s2)) -> s +. jaccard s1 s2)
-  in
-  let nf = float (List.length as_sets) in
-  let num_pairs = nf *. (nf -. 1.) /. 2. in
-  sum_jaccard_index /. num_pairs
-  *)
-
 let count_consecutive_doubles = function
   | []      -> []
   | h :: [] -> [ h, 1]
