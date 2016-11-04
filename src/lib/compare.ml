@@ -244,22 +244,43 @@ let args_to_projections ?loci ?classes mlst spec_gv data =
   in
   against_all_pairs eval data
 
+let remove_and_assoc el list =
+  let rec loop acc = function
+    | []                             -> raise Not_found
+    | ((e, _) as p) :: t when e = el -> p, (List.rev acc @ t)
+    | h :: t                         -> loop (h :: acc) t
+  in
+  loop [] list
+
 (* Reduce the [info]'s to have a unique allele resolution.
    ex. A*01:01:01:01 -> A*01:01 and 2nd pair will get "x2" appended. *)
-let keyed_by_allele_info_assoc ?resolution ?(count_homozygous_2x=true) =
+let keyed_by_allele_info_assoc ?resolution ?(label_homozygous=true) =
   let to_allele = to_allele ?resolution in
   List.fold_left ~init:[] ~f:(fun acc ai ->
     let k = to_allele ai in
-    if List.mem_assoc k acc then
-      (k ^ "x2", ai) :: acc
-    else
+    if List.mem_assoc k acc then begin
+      if label_homozygous then
+        (k ^ "x2", ai) :: acc
+      else
+        let (_, aio), without = remove_and_assoc k acc in
+        (k, {aio with confidence = aio.confidence +. ai.confidence }) :: without
+    end else
       (k, ai) :: acc)
 
 let set_of_assoc_keys l =
   (AlleleSet.of_list (List.map ~f:fst l))
 
-let sum_confidence =
-  List.fold_left ~f:(fun s (_, ai) -> s +. ai.confidence) ~init:0.
+let sum_confidence p =
+  let open Oml in
+  List.map p ~f:(fun (_, ai) -> ai.confidence)
+  |> Array.of_list
+  |> Util.Array.sumf
+
+let sum_snd p =
+  let open Oml in
+  List.map p ~f:snd
+  |> Array.of_list
+  |> Util.Array.sumf
 
 let normalize sum assoc =
   let open Oml in
@@ -269,43 +290,61 @@ let normalize sum assoc =
   else
     List.map ~f:(fun (k, ai) -> k, ai.confidence /. sum) assoc
 
+let describe_distr p =
+  String.concat ";" (List.map p ~f:(fun (s, c) -> sprintf "\"%s\",%0.20f" s c))
+
 let to_metric = function
   | `Jaccard ->
-      fun asc1 asc2 -> jaccard (set_of_assoc_keys asc1) (set_of_assoc_keys asc2)
+      begin fun asc1 asc2 ->
+        jaccard (set_of_assoc_keys asc1) (set_of_assoc_keys asc2)
+      end
+      , true
   | `KLDiv   ->
       let open Oml in
-      fun asc1 asc2 ->
+      begin fun asc1 asc2 ->
         let p = normalize (sum_confidence asc1) asc1 in
         let q = normalize (sum_confidence asc2) asc2 in
         try
-          Statistics.Measures.discrete_kl_divergence ~d:1e-10 ~p ~q ()
+          let i = Statistics.Measures.discrete_kl_divergence ~d:1e-10 ~p ~q () in
+          if i = infinity then begin
+            let missing =
+              List.filter_map p ~f:(fun (k, _) ->
+                  if not (List.mem_assoc k q) then Some k else None)
+            in
+            eprintf "infinity! alleles found in p but not in q: %s \n\tp: %0.16f %s\n\tq: %0.16f %s\n"
+              (String.concat "; " missing)
+              (sum_snd p) (describe_distr p)
+              (sum_snd q) (describe_distr q)
+          end;
+          i
         with (Invalid_argument m) ->
           eprintf "%s returning infinity. p: %0.20f %s vs q: %0.20f %s\n" m
-            (List.map p ~f:snd |> Array.of_list |> Util.Array.sumf)
-            (String.concat ";" (List.map p ~f:(fun (s, c) -> sprintf "%s:%0.2f" s c)))
-            (List.map q ~f:snd |> Array.of_list |> Util.Array.sumf)
-            (String.concat ";" (List.map q ~f:(fun (s, c) -> sprintf "%s:%0.2f" s c))) ;
+            (sum_snd p) (describe_distr p)
+            (sum_snd q) (describe_distr q);
           infinity
+      end
+      , false
 
 (* ?classes: Allow more than one HLA_class to do the analysis on, but default
     to ignoring the distinction.
     ?loci: Allow more than one HLA loci to do the analysis on, superseding
     any classes argument, but default to ignoring the distinction. Specify
     a string prefix that is used group alleles.  *)
-let analyze_samples ?loci ?classes ?resolution ?count_homozygous_2x ?(metrics=[`Jaccard])
+let analyze_samples ?loci ?classes ?resolution ?label_homozygous ?(metrics=[`Jaccard])
   nested_map_bindings =
-    let ilist_map = keyed_by_allele_info_assoc ?resolution ?count_homozygous_2x in
+    let ilist_map = keyed_by_allele_info_assoc ?resolution in
     let metricsf =
       List.map metrics ~f:(fun m ->
-          let mtr = to_metric m in
+          let mtr, label_homozygous = to_metric m in
           fun alst1 alst2 ->
-            let ilist1 = ilist_map alst1 in
-            let ilist2 = ilist_map alst2 in
+            let ilist1 = ilist_map ~label_homozygous alst1 in
+            let ilist2 = ilist_map ~label_homozygous alst2 in
             mtr ilist1 ilist2)
     in
     let spgv ~itassoc1:(typer1, ilist1) ~itassoc2:(typer2, ilist2) =
       specific_grouped_view ?loci ?classes
-        ~typer1 ~ilist1:(ilist_map ilist1) ~typer2 ~ilist2:(ilist_map ilist2)
+        ~typer1 ~ilist1:(ilist_map ?label_homozygous ilist1)
+        ~typer2 ~ilist2:(ilist_map ?label_homozygous ilist2)
     in
     args_to_projections ?loci ?classes metricsf spgv nested_map_bindings
 
