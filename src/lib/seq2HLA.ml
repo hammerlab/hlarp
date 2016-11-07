@@ -7,7 +7,7 @@ let filename_regex = Re_posix.compile_pat ("(.+)-Class(I{1,2})" ^ suffix)
 let to_hla_class = function
   | "I" -> I
   | "II" -> II
-  | s -> raise (invalid_arg ("Unrecognized HLA class : " ^ s))
+  | s -> invalid_arg ("Unrecognized HLA class : " ^ s)
 
 let parse fname =
   let cls_match = Re.exec filename_regex (Filename.basename fname) in

@@ -1,1 +1,2 @@
+true: annot, bin_annot, principal
 <src/lib/*.cmx> and not <src/lib/hlarp.cm*> : for-pack(Hlarp)

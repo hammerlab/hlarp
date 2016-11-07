@@ -3,6 +3,8 @@
 #require "re.posix"
 #require "re.glob"
 #require "cmdliner"
+#require "oml"
 
 #directory "_build/src/lib"
-#load_rec "hlarp.cmo"
+#load_rec "hlarp.cma"
+open Std
