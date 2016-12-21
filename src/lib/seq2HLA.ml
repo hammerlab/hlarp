@@ -21,20 +21,31 @@ let parse fname =
       failwith ("Unsupported header row: " ^ hdr)
     end
   else
+    let extract_ambiguity allele =
+      let l1 = String.length allele - 1 in
+        if String.get allele l1 = '\'' then
+          String.sub allele 0 l1, "ambiguity=true"
+        else
+          allele, "ambiguity=false"
+    in
     let rec loop acc =
       try
         let a1, a2 =
           Scanf.sscanf (input_line ic) "%s\t%s\t%s\t%s\t%s"
             (fun _locus allele1 conf1 allele2 conf2 ->
+                let allele1, typer_spec1 = extract_ambiguity allele1 in
+                let allele2, typer_spec2 = extract_ambiguity allele2 in
                 { hla_class  = cls
                 ; allele     = allele1
                 ; qualifier  = ""
                 ; confidence = float_of_string_nanable conf1
+                ; typer_spec = typer_spec1
                 },
                 { hla_class  = cls
                 ; allele     = allele2
                 ; qualifier  = ""
                 ; confidence = float_of_string_nanable conf2
+                ; typer_spec = typer_spec2
                 })
         in
         loop (a2 :: a1 :: acc)
@@ -55,4 +66,3 @@ let scan_directory dir =
   |> List.map ~f:(fun f -> parse (Filename.concat dir f))
   |> join_by_fst
   |> List.sort ~cmp:compare  (* sort by keys aka runs *)
-

@@ -26,11 +26,13 @@ let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
               ; allele     = allele1
               ; qualifier  = ""
               ; confidence = float_of_string_nanable confidence
+              ; typer_spec = ""
               },
               { hla_class  = allele_to_hla_class allele2
               ; allele     = allele2
               ; qualifier  = ""
               ; confidence = float_of_string_nanable confidence
+              ; typer_spec = ""
               })
         in
         loop true (a1 :: a2 :: acc)

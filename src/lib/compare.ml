@@ -40,7 +40,7 @@ module HlarpOutputFiles = struct
         let line = input_line ic in
         let sample, info =
           match Re.split (Re.char ',' |> Re.compile) line with
-          | cls_s :: all_s :: qul_s :: con_s :: sample :: [] ->
+          | cls_s :: all_s :: qul_s :: con_s :: typer_spec :: sample :: [] ->
               sample
               , { hla_class =
                     if cls_s = "1" then I else
@@ -49,6 +49,7 @@ module HlarpOutputFiles = struct
                 ; allele = all_s
                 ; qualifier = qul_s
                 ; confidence = float_of_string_nanable con_s
+                ; typer_spec
               }
           | _ -> invalid_arg
                     (sprintf "can't parse Hlarp input line %s from %s"

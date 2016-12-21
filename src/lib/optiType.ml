@@ -23,7 +23,12 @@ let parse fname =
     end
   else
     let info allele =
-      { hla_class = I ; allele ; qualifier = ""; confidence = nan}
+      { allele
+      ; hla_class  = I
+      ; qualifier  = ""
+      ; confidence = nan
+      ; typer_spec = ""
+      }
     in
     let lst =
       Scanf.sscanf (input_line ic)

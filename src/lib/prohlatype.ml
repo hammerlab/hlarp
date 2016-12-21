@@ -29,6 +29,7 @@ let parse (fname, re_group) =
         ; qualifier = ""
         ; allele
         ; confidence = float_of_string_nanable confidence
+        ; typer_spec = ""
         }
       in
       loop (info :: acc)

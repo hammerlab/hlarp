@@ -31,11 +31,12 @@ type info =
   ; allele      : allele
   ; qualifier   : string
   ; confidence  : float
+  (* store typer specific information in free form text. *)
+  ; typer_spec  : string
   }
 
-let info_to_string { hla_class; allele; qualifier; confidence} =
-  sprintf "%s-%s-%s-%f" (hla_class_to_string hla_class)
-    allele qualifier confidence
+let info_to_string { hla_class; allele; qualifier; confidence; typer_spec} =
+  sprintf "%s-%s-%s-%f-%s" (hla_class_to_string hla_class)
+    allele qualifier confidence typer_spec
 
 module InfoMap = Map.Make (struct type t = info let compare = compare end)
-
