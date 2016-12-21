@@ -32,7 +32,8 @@ let compare resolution classes loci max_allele_rows_to_print metrics summary_by
   let loci = match loci with | [] -> None | l -> Some l in
   let nmp  = Compare.nested_maps pos_args in
   let azo  = Compare.analyze_samples ?loci ?resolution ?classes ~metrics nmp in
-  Compare.output ?max_allele_rows_to_print ~summary_by stdout azo
+  Compare.(output ?max_allele_rows_to_print ~summary_by stdout
+    (strip_empty_comparisons (Some stdout) azo))
 
 let () =
   let open Cmdliner in

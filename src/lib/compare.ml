@@ -352,6 +352,18 @@ let analyze_samples ?loci ?classes ?resolution ?label_homozygous ?(metrics=[`Jac
     in
     args_to_projections ?loci ?classes metricsf spgv nested_map_bindings
 
+let strip_empty_comparisons oc =
+  let report =
+    Option.value_map oc ~default:(fun _fmt _s -> ())
+      ~f:(fun oc -> fun fmt s -> fprintf oc fmt s)
+  in
+  List.filter ~f:(fun (sample, comparison_list) ->
+    if comparison_list = [] then begin
+      report "Removeing %s from comparison didn't find in multiple sources.\n" sample;
+      false
+    end else
+      true)
+
 let float_lst_to_str ~sep l =
   String.concat sep (List.map ~f:(sprintf "%0.2f") l)
 
@@ -382,9 +394,10 @@ let output_aggregates ?(summary_by=`Mean) oc smpl_width widths analyze_samples_o
   |> String.concat sep
   |> fprintf oc "%s\n"
 
-let output ?(max_allele_rows_to_print=max_int) ?summary_by oc analyze_samples_output =
-  let fst_smpl, fst_assoc = List.hd_exn analyze_samples_output in
-  if fst_assoc = [] then fprintf oc "No comparisons\n" else
+let output ?(max_allele_rows_to_print=max_int) ?summary_by oc = function
+  | []
+  | ((_, []) :: _) -> fprintf oc "No comparisons\n"
+  | ((fst_smpl, fst_assoc) :: _) as analyze_samples_output ->
     let join_allele_str (a, lst) =
       sprintf "%s: %s" a (String.concat "," lst)
     in
