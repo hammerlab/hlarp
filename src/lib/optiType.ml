@@ -4,7 +4,7 @@ open Std
 let suffix = "_result.tsv"
 
 (* The file is 2 directories down:
-    1st is the 'run' name.
+    1st is the sample name.
     2nd is the date, since there can be multiple datetimes we'll need some
       logic to combine them.
   We'll hard-code Unix forward slashes. *)
@@ -12,7 +12,7 @@ let filename_regex = Re_posix.compile_pat ("([^/]+)/([^/]+)/[^/]+" ^ suffix)
 
 let parse fname =
   let grp = Re.all filename_regex fname |> List.hd_exn in
-  let run = Re.Group.get grp 1 in
+  let sample = Re.Group.get grp 1 in
   let time_stamp = Re.Group.get grp 2 in
   let ic  = open_in fname in
   let hdr = input_line ic in
@@ -38,7 +38,7 @@ let parse fname =
             [ info a1 ; info a2 ; info b1 ; info b2 ; info c1 ; info c2 ])
     in
     close_in ic;
-    (run, time_stamp), lst
+    (sample, time_stamp), lst
 
 let glob_regex = Re.compile (Re_glob.glob ("*" ^ suffix))
 
@@ -61,17 +61,16 @@ let scan_directory ?(combine_multiday=`TakeLast) dir =
   in
   loop [] [dir]
   |> List.map ~f:parse
-  |> List.sort ~cmp:compare (* Sort by keys aka-runs *)
+  |> List.sort ~cmp:compare (* Sort by keys (sample's) *)
   |> (function              (* Do some deduping of the multi-date things *)
       | [] -> []
-      | (((first_run,_timestamp_dir),first_res) :: _) as lst ->
+      | (((first_sample,_timestamp_dir),first_res) :: _) as lst ->
         match combine_multiday with
         | `TakeLast ->
-            List.fold_left lst ~init:(first_run, first_res, [])
-              ~f:(fun (previous_run, prev_res, acc) ((next_run, _timestamp_dir), lst) ->
-                    if previous_run = next_run then
-                      (next_run, lst, acc)  (* ignore the previous run's results. *)
+            List.fold_left lst ~init:(first_sample, first_res, [])
+              ~f:(fun (previous_sample, prev_res, acc) ((next_sample, _timestamp_dir), lst) ->
+                    if previous_sample = next_sample then
+                      (next_sample, lst, acc)  (* ignore the previous sample's results. *)
                     else
-                      (next_run, lst, (previous_run, prev_res) :: acc))
+                      (next_sample, lst, (previous_sample, prev_res) :: acc))
             |> (fun (p, l, acc) -> (p, l) :: acc))
-

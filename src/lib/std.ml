@@ -8,10 +8,10 @@ module StringMap = Map.Make (struct type t = string let compare = compare end)
 
 (* Combine assocation lists, with list values, by their string keys. *)
 let join_by_fst lst =
-  List.fold_left lst ~init:StringMap.empty ~f:(fun acc (run, inf) ->
-      match StringMap.find run acc with
-      | exception Not_found -> StringMap.add run inf acc
-      | clst -> StringMap.add run (clst @ inf) acc)
+  List.fold_left lst ~init:StringMap.empty ~f:(fun acc (r, inf) ->
+      match StringMap.find r acc with
+      | exception Not_found -> StringMap.add r inf acc
+      | clst -> StringMap.add r (clst @ inf) acc)
   |> StringMap.bindings
 
 let float_of_string_nanable s = try float_of_string s with Failure _ -> nan
@@ -27,6 +27,10 @@ type allele = string
 (** A sample (aka run) is an obvservation for which we may have multiple
     [info]'s. *)
 type sample = string
+
+module SampleMap = Map.Make (struct type t = sample let compare = compare end)
+module AlleleMap = Map.Make (struct type t = allele let compare = compare end)
+
 
 let nan_is_empty f = if f <> f then "" else sprintf "%f" f
 

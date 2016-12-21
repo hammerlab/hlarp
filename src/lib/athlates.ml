@@ -12,7 +12,7 @@ let allele_to_hla_class s =
 
 let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
   let open Info in
-  let run = Re.Group.get re_group 1 in
+  let sample = Re.Group.get re_group 1 in
   let ic = open_in fname in
   let rec loop found_header acc =
     try
@@ -64,7 +64,7 @@ let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
             | a :: [] -> [a; a] (* Preserve pair to signal homozygosity *)
             | lst     -> lst
   in
-  run, alleles
+  sample, alleles
 
 let scan_directory ?equal_pairs dir =
   let rec loop acc = function
@@ -86,5 +86,4 @@ let scan_directory ?equal_pairs dir =
   loop [] [dir]
   |> List.map ~f:(parse ?equal_pairs)
   |> join_by_fst
-  |> List.sort ~cmp:compare  (* sort by keys aka runs *)
-
+  |> List.sort ~cmp:compare  (* sort by keys (samples). *)

@@ -1,15 +1,12 @@
 
 open Std
 
-module SampleMap = Map.Make (struct type t = sample let compare = compare end)
-module AlleleMap = Map.Make (struct type t = allele let compare = compare end)
-
 type directory = string
 type scanner = directory -> (sample * Info.t list) list
 
 type source = string
 
-(* When we want to compare multiple runs from the same source type
+(* When we want to compare multiple samples (runs) from the same source type
    (ex. Seq2HLA dir1, dir2 ..) use this method to create a prefix function
    that appends a number to the source if there are multiple and
    create source. *)

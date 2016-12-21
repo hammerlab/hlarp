@@ -11,7 +11,7 @@ let to_hla_class = function
 
 let parse fname =
   let cls_match = Re.exec filename_regex (Filename.basename fname) in
-  let run = Re.Group.get cls_match 1 in
+  let sample = Re.Group.get cls_match 1 in
   let cls = to_hla_class (Re.Group.get cls_match 2) in
   let ic = open_in fname in
   let hdr = input_line ic in
@@ -52,7 +52,7 @@ let parse fname =
         loop (a2 :: a1 :: acc)
       with End_of_file ->
         close_in ic;
-        (run, acc)
+        (sample, acc)
     in
     loop []
 
@@ -66,4 +66,4 @@ let scan_directory dir =
   |> List.dedup
   |> List.map ~f:(fun f -> parse (Filename.concat dir f))
   |> join_by_fst
-  |> List.sort ~cmp:compare  (* sort by keys aka runs *)
+  |> List.sort ~cmp:compare  (* sort by keys (sample's) *)
