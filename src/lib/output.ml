@@ -2,7 +2,7 @@
 open Std
 
 let out_channel oc run_assoc =
-  fprintf oc "%srun\n" Info.csv_header;
+  fprintf oc "%s,run\n" Info.csv_header;
   List.iter run_assoc ~f:(fun (run, lst) ->
     List.sort ~cmp:compare lst
     |> List.iter ~f:(fun i ->
