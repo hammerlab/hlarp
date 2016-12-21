@@ -40,10 +40,10 @@ module HlarpOutputFiles = struct
         let info, tl = Info.input_as_csv_row ~file ic in
         let sample =
           match tl with
-          | [sample] -> sample
-          | lst ->
-              invalid_argf "Too many sample names after info: %s"
-                (String.concat "," lst)
+          | [s] -> s
+          | []  -> invalid_argf "Missing sample name in: %s" file
+          | lst -> invalid_argf "Too many sample names after info: %s, in %s."
+                    (String.concat "," lst) file
         in
         let key = if use_basename then basename else file in
         match SampleMap.find sample m with
