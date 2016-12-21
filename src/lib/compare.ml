@@ -10,6 +10,7 @@ type source = string
    (ex. Seq2HLA dir1, dir2 ..) use this method to create a prefix function
    that appends a number to the source if there are multiple and
    create source. *)
+(*
 let to_source (name : string) (lst : 'a list) : (int -> source) =
   if List.length lst > 1 then
     (fun i -> sprintf "%s%d" name (i + 1))
@@ -25,11 +26,30 @@ let add_to_sample_map ~source_name (scan : scanner) (dirlst : directory list) sa
           match SampleMap.find sample rmp with
           | lst                 -> SampleMap.add sample ((p,info_lst) :: lst) rmp
           | exception Not_found -> SampleMap.add sample ((p,info_lst) :: []) rmp))
+          *)
+
+let add_to_sample_map ~source_name (scan : scanner) (dir : directory) sample_map =
+  scan dir
+  |> List.fold_left ~init:sample_map ~f:(fun smp (sample, info_lst) ->
+      let bs =
+        match SampleMap.find sample smp with
+        | lst                 -> lst
+        | exception Not_found -> []
+      in
+      SampleMap.add sample ((source_name,info_lst) :: bs) smp)
+
+let remove_and_assoc el list =
+  let rec loop acc = function
+    | []                      -> raise Not_found
+    | (e, v) :: t when e = el -> v, (List.rev acc @ t)
+    | h :: t                  -> loop (h :: acc) t
+  in
+  loop [] list
 
 (* Use previously written Hlarp output files as comparison source.  *)
 module HlarpOutputFiles = struct
 
-  let load_file ~use_basename (basename, file) =
+  let load_file ~source_name file =
     let ic = open_in file in
     let _hdr = input_line ic in
     let rec loop m =
@@ -42,94 +62,97 @@ module HlarpOutputFiles = struct
           | lst -> invalid_argf "Too many sample names after info: %s, in %s."
                     (String.concat "," lst) file
         in
-        let key = if use_basename then basename else file in
-        match SampleMap.find sample m with
-        | (f, lst) when f = key -> loop (SampleMap.add sample (key, info :: lst) m)
-        | exception Not_found   -> loop (SampleMap.add sample (key, info :: []) m)
-        | (nf, _)               -> invalid_arg
-              (sprintf "encountered another file %s while parsing: %s" nf key)
+        let new_value =
+          match SampleMap.find sample m with
+          | exception Not_found -> [source_name, [info]]
+          | lst                 ->
+              try
+                let ilst, without = remove_and_assoc source_name lst in
+                (source_name, (info :: ilst)) :: without
+              with Not_found ->
+                (source_name, [info]) :: lst
+        in
+        loop (SampleMap.add sample new_value m)
       with End_of_file ->
         m
     in
-    loop SampleMap.empty
+    loop (*SampleMap.empty*)
 
-  let setup filelst =
-    let with_basenames =
-      List.map filelst ~f:(fun file -> Filename.basename file, file)
-      |> List.sort ~cmp:compare
+  let add cntr file =
+    let basename = Filename.basename file in
+    let source_name =
+      if cntr = 0 then basename else sprintf "%s-%d" basename cntr
     in
-    let compare_by_first (b1, _) (b2, _) = compare b1 b2 in
-    let use_basename = not (List.contains_dup with_basenames ~compare:compare_by_first) in
-    use_basename, with_basenames
-
-
-  let add filelst sample_map =
-    let use_basename, with_basenames = setup filelst in
-    List.fold_left with_basenames ~init:sample_map ~f:(fun m bfp ->
-      let fm = load_file ~use_basename bfp in
-      let fmm = SampleMap.map (fun fl -> fl :: []) fm in
-      SampleMap.union (fun _sample l1 l2 -> Some (l1 @ l2)) m fmm)
+    load_file ~source_name file
 
 end
 
-let hlarp_file_arg = "hlarp-file"
-let seq2hl_file_arg = "seq2HLA"
-let optitype_file_arg = "optitype"
-let athlates_file_arg = "athlates"
-let prohlatype_file_arg = "prohlatype"
+(* Count hlarp files by keeping a list of the basenames, to which we'll append
+   the number of times that basename has already occured, if greater than 0. *)
+type typer_counter =
+  { hlarp_files : string list
+  ; seq2HLAs    : int
+  ; optitypes   : int
+  ; athlates    : int
+  ; prohlatypes : int
+  }
 
-let seq2HLA_source = "seq2HLA"
-let optitype_source = "OptiType"
-let athlates_source = "ATHLATES"
-let prohlatype_source = "Prohlatype"
+let empty_counter =
+  { hlarp_files = []
+  ; seq2HLAs    = 0
+  ; optitypes   = 0
+  ; athlates    = 0
+  ; prohlatypes = 0
+  }
 
-let argument_order ~use_basename =
-  let rec loop s o a p acc = function
-    | []
-    | _ :: []       ->  List.rev acc
-    | h :: t :: tl  ->
-        if h = "--" ^ hlarp_file_arg then
-          loop s o a p ((if use_basename then Filename.basename t else t) :: acc) tl
-        else if h = "--" ^ seq2hl_file_arg then
-          let source_name = if s = 0 then seq2HLA_source else seq2HLA_source ^ (string_of_int s) in
-          loop (s + 1) o a p (source_name :: acc) tl
-        else if h = "--" ^ optitype_file_arg then
-          let source_name = if s = 0 then optitype_source else optitype_source ^ (string_of_int o) in
-          loop s (o + 1) a p (source_name :: acc) tl
-        else if h = "--" ^ athlates_file_arg then
-          let source_name = if s = 0 then athlates_source else athlates_source ^ (string_of_int o) in
-          loop s o (a + 1) p (source_name :: acc) tl
-        else if h = "--" ^ prohlatype_file_arg then
-          let source_name = if s = 0 then prohlatype_source else prohlatype_source ^ (string_of_int o) in
-          loop s o a (p + 1) (source_name :: acc) tl
-        else
-          loop s o a p acc (t :: tl)
-  in
-  loop 0 0 0 0 [] (Array.to_list Sys.argv)
-
-let nested_maps ?(seqlst=[]) ?(optlst=[]) ?(athlst=[]) ?(prolst=[]) ?(filelst=[]) () =
-  let loaded_list =
-    SampleMap.empty
-    |> add_to_sample_map ~source_name:seq2HLA_source  Seq2HLA.scan_directory seqlst
-    |> add_to_sample_map ~source_name:optitype_source OptiType.scan_directory optlst
-    |> add_to_sample_map ~source_name:athlates_source Athlates.scan_directory athlst
-    |> add_to_sample_map ~source_name:prohlatype_source Prohlatype.scan_directory prolst
-    |> HlarpOutputFiles.add filelst
-    |> SampleMap.bindings
-  in
-  let use_basename, _ = HlarpOutputFiles.setup filelst in
-  let arg_order = argument_order ~use_basename in
-  Printf.printf "Args: %s\n" (Sys.argv |> Array.to_list |> String.concat "; ");
-  Printf.printf "Arg order: %s\n" (String.concat "; " arg_order);
-
-  let find_in_arg source =
-    let ns = String.length source in
-    List.findi arg_order ~f:(fun _i s ->
-        String.sub s 0 (min (String.length s) ns) = source)
-  in
-  List.map loaded_list ~f:(fun (k, assoc) ->
-    k, List.sort assoc ~cmp:(fun (s1, _) (s2, _) ->
-        compare (find_in_arg s1) (find_in_arg s2)))
+let nested_maps args =
+  List.fold_left args ~init:(SampleMap.empty, empty_counter)
+    ~f:(fun (m,c) s ->
+          match s with
+          | `HlarpFile f ->
+              let basename = Filename.basename f in
+              let same = List.filter c.hlarp_files ~f:((=) basename) in
+              let cntr = List.length same in
+              let newm = HlarpOutputFiles.add cntr f m in
+              newm, { c with hlarp_files = basename :: c.hlarp_files }
+          | `seq2HLA d  ->
+              let source_name =
+                if c.seq2HLAs = 0 then
+                  "seq2HLA"
+                else
+                  sprintf "seq2HLA-%d" c.seq2HLAs
+              in
+              add_to_sample_map ~source_name Seq2HLA.scan_directory d m
+              , { c with seq2HLAs = c.seq2HLAs + 1 }
+          | `OptiType d  ->
+              let source_name =
+                if c.optitypes = 0 then
+                  "OptiType"
+                else
+                  sprintf "OptiType-%d" c.optitypes
+              in
+              add_to_sample_map ~source_name OptiType.scan_directory d m
+              , { c with optitypes = c.optitypes + 1 }
+            | `ATHLATES d  ->
+              let source_name =
+                if c.athlates = 0 then
+                  "ATHLATES"
+                else
+                  sprintf "ATHLATES-%d" c.athlates
+              in
+              add_to_sample_map ~source_name Athlates.scan_directory d m
+              , { c with athlates = c.athlates + 1 }
+            | `Prohlatype d  ->
+              let source_name =
+                if c.prohlatypes = 0 then
+                  "Prohlatype"
+                else
+                  sprintf "Prohlatype-%d" c.prohlatypes
+              in
+              add_to_sample_map ~source_name Prohlatype.scan_directory d m
+              , { c with prohlatypes = c.prohlatypes + 1 })
+  |> fst  (* discard final counter *)
+  |> SampleMap.bindings
 
 let list_fold_over_all_pairs ~f ~init lst =
   let rec loop init = function
@@ -232,14 +255,6 @@ let args_to_projections ?loci ?classes mlst spec_gv data =
   in
   against_all_pairs eval data
 
-let remove_and_assoc el list =
-  let rec loop acc = function
-    | []                             -> raise Not_found
-    | ((e, _) as p) :: t when e = el -> p, (List.rev acc @ t)
-    | h :: t                         -> loop (h :: acc) t
-  in
-  loop [] list
-
 (* Reduce the [info]'s to have a unique allele resolution.
    ex. A*01:01:01:01 -> A*01:01 and 2nd pair will get "x2" appended. *)
 let keyed_by_allele_info_assoc ?resolution ?(label_homozygous=true) =
@@ -251,7 +266,7 @@ let keyed_by_allele_info_assoc ?resolution ?(label_homozygous=true) =
       if label_homozygous then
         (k ^ "x2", ai) :: acc
       else
-        let (_, aio), without = remove_and_assoc k acc in
+        let aio, without = remove_and_assoc k acc in
         (k, {aio with confidence = aio.confidence +. ai.confidence }) :: without
     end else
       (k, ai) :: acc)
