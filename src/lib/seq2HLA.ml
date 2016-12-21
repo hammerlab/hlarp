@@ -28,6 +28,7 @@ let parse fname =
         else
           allele, "ambiguity=false"
     in
+    let open Info in
     let rec loop acc =
       try
         let a1, a2 =

@@ -11,6 +11,7 @@ let allele_to_hla_class s =
   if String.get s 0 = 'D' then II else I
 
 let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
+  let open Info in
   let run = Re.Group.get re_group 1 in
   let ic = open_in fname in
   let rec loop found_header acc =

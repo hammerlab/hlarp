@@ -25,6 +25,7 @@ let parse (fname, re_group) =
       let line = input_line ic in
       let confidence, allele = Scanf.sscanf line "%s\t%s" (fun c a -> (c, a)) in
       let info =
+        let open Info in
         { hla_class = allele_to_hla_class allele
         ; qualifier = ""
         ; allele
@@ -43,7 +44,7 @@ let parse (fname, re_group) =
   in
   run, ilst
 
-let scan_directory (dir : string) : ((sample * info list) list) =
+let scan_directory (dir : string) : ((sample * Info.t list) list) =
   let rec loop acc = function
     | [] -> acc
     | dir :: t ->

@@ -22,6 +22,7 @@ let parse fname =
       failwith ("Unsupported header row: " ^ hdr)
     end
   else
+    let open Info in
     let info allele =
       { allele
       ; hla_class  = I
