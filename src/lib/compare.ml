@@ -1,15 +1,12 @@
 
 open Std
 
-module SampleMap = Map.Make (struct type t = sample let compare = compare end)
-module AlleleMap = Map.Make (struct type t = allele let compare = compare end)
-
 type directory = string
-type scanner = directory -> (sample * info list) list
+type scanner = directory -> (sample * Info.t list) list
 
 type source = string
 
-(* When we want to compare multiple runs from the same source type
+(* When we want to compare multiple samples (runs) from the same source type
    (ex. Seq2HLA dir1, dir2 ..) use this method to create a prefix function
    that appends a number to the source if there are multiple and
    create source. *)
@@ -37,22 +34,13 @@ module HlarpOutputFiles = struct
     let _hdr = input_line ic in
     let rec loop m =
       try
-        let line = input_line ic in
-        let sample, info =
-          match Re.split (Re.char ',' |> Re.compile) line with
-          | cls_s :: all_s :: qul_s :: con_s :: sample :: [] ->
-              sample
-              , { hla_class =
-                    if cls_s = "1" then I else
-                      if cls_s = "2" then II else
-                        invalid_arg (sprintf "unrecognized cls: %s" cls_s)
-                ; allele = all_s
-                ; qualifier = qul_s
-                ; confidence = float_of_string_nanable con_s
-              }
-          | _ -> invalid_arg
-                    (sprintf "can't parse Hlarp input line %s from %s"
-                      line file)
+        let info, tl = Info.input_as_csv_row ~file ic in
+        let sample =
+          match tl with
+          | [s] -> s
+          | []  -> invalid_argf "Missing sample name in: %s" file
+          | lst -> invalid_argf "Too many sample names after info: %s, in %s."
+                    (String.concat "," lst) file
         in
         let key = if use_basename then basename else file in
         match SampleMap.find sample m with
@@ -154,8 +142,8 @@ let colon_regex = Re_posix.compile_pat ":"
 
 let to_allele ?resolution ai =
   match resolution with
-  | None   -> ai.allele
-  | Some n -> List.take (Re.split colon_regex ai.allele) n
+  | None   -> ai.Info.allele
+  | Some n -> List.take (Re.split colon_regex ai.Info.allele) n
               |> String.concat ":"
 
 module AlleleSet = Set.Make (struct type t = allele let compare = compare end)
@@ -173,10 +161,10 @@ let jaccard ?(zero_on_empty=true) s1 s2 =
     (float inter) /. (float union)
 
 let loci_prefix_filter p ai =
-  Re.execp (Re_posix.compile_pat ("^" ^ p)) ai.allele
+  Re.execp (Re_posix.compile_pat ("^" ^ p)) ai.Info.allele
 
 let hla_class_filter c ai =
-  ai.hla_class = c
+  ai.Info.hla_class = c
 
 let count_consecutive_doubles = function
   | []      -> []
@@ -255,6 +243,7 @@ let remove_and_assoc el list =
 (* Reduce the [info]'s to have a unique allele resolution.
    ex. A*01:01:01:01 -> A*01:01 and 2nd pair will get "x2" appended. *)
 let keyed_by_allele_info_assoc ?resolution ?(label_homozygous=true) =
+  let open Info in
   let to_allele = to_allele ?resolution in
   List.fold_left ~init:[] ~f:(fun acc ai ->
     let k = to_allele ai in
@@ -272,7 +261,7 @@ let set_of_assoc_keys l =
 
 let sum_confidence p =
   let open Oml in
-  List.map p ~f:(fun (_, ai) -> ai.confidence)
+  List.map p ~f:(fun (_, ai) -> ai.Info.confidence)
   |> Array.of_list
   |> Util.Array.sumf
 
@@ -288,7 +277,7 @@ let normalize sum assoc =
     let oon = 1. /. (float (List.length assoc)) in
     List.map ~f:(fun (k, _) -> k, oon) assoc
   else
-    List.map ~f:(fun (k, ai) -> k, ai.confidence /. sum) assoc
+    List.map ~f:(fun (k, ai) -> k, ai.Info.confidence /. sum) assoc
 
 let describe_distr p =
   String.concat ";" (List.map p ~f:(fun (s, c) -> sprintf "\"%s\",%0.20f" s c))

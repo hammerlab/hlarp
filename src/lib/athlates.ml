@@ -11,7 +11,8 @@ let allele_to_hla_class s =
   if String.get s 0 = 'D' then II else I
 
 let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
-  let run = Re.Group.get re_group 1 in
+  let open Info in
+  let sample = Re.Group.get re_group 1 in
   let ic = open_in fname in
   let rec loop found_header acc =
     try
@@ -26,11 +27,13 @@ let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
               ; allele     = allele1
               ; qualifier  = ""
               ; confidence = float_of_string_nanable confidence
+              ; typer_spec = ""
               },
               { hla_class  = allele_to_hla_class allele2
               ; allele     = allele2
               ; qualifier  = ""
               ; confidence = float_of_string_nanable confidence
+              ; typer_spec = ""
               })
         in
         loop true (a1 :: a2 :: acc)
@@ -61,7 +64,7 @@ let parse ?(equal_pairs=`MostLikelyPair) (fname, re_group) =
             | a :: [] -> [a; a] (* Preserve pair to signal homozygosity *)
             | lst     -> lst
   in
-  run, alleles
+  sample, alleles
 
 let scan_directory ?equal_pairs dir =
   let rec loop acc = function
@@ -83,5 +86,4 @@ let scan_directory ?equal_pairs dir =
   loop [] [dir]
   |> List.map ~f:(parse ?equal_pairs)
   |> join_by_fst
-  |> List.sort ~cmp:compare  (* sort by keys aka runs *)
-
+  |> List.sort ~cmp:compare  (* sort by keys (samples). *)

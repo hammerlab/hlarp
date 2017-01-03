@@ -1,14 +1,10 @@
 
 open Std
 
-let nan_is_empty f = if f <> f then "" else sprintf "%f" f
-
-let out_channel oc run_assoc =
-  fprintf oc "class,allele,qualifier,confidence,run\n";
-  List.iter run_assoc ~f:(fun (run, lst) ->
+let out_channel oc sample_assoc =
+  fprintf oc "%s,sample\n" Info.csv_header;
+  List.iter sample_assoc ~f:(fun (sample, lst) ->
     List.sort ~cmp:compare lst
-    |> List.iter ~f:(fun {hla_class; allele; qualifier; confidence} ->
-      fprintf oc "%s,%s,%s,%s,%s\n"
-        (hla_class_to_string hla_class)
-        allele qualifier (nan_is_empty confidence) run))
-
+    |> List.iter ~f:(fun i ->
+        Info.output_as_csv_row oc i;
+        fprintf oc ",%s\n" sample))
