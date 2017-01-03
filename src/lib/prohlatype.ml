@@ -12,12 +12,12 @@ let allele_to_hla_class s =
   if String.get s 0 = 'D' then II else I
 
 let parse (fname, re_group) =
-  let sample = Re.Group.get re_group 2 in
-  let sample =
-    if String.contains sample '_' then
-      String.sub sample 0 (String.index sample '_')
+  let run = Re.Group.get re_group 2 in
+  let run =
+    if String.contains run '_' then
+      String.sub run 0 (String.index run '_')
     else
-      sample
+      run
   in
   let ic = open_in fname in
   let rec loop acc =
@@ -25,12 +25,10 @@ let parse (fname, re_group) =
       let line = input_line ic in
       let confidence, allele = Scanf.sscanf line "%s\t%s" (fun c a -> (c, a)) in
       let info =
-        let open Info in
         { hla_class = allele_to_hla_class allele
         ; qualifier = ""
         ; allele
         ; confidence = float_of_string_nanable confidence
-        ; typer_spec = ""
         }
       in
       loop (info :: acc)
@@ -42,9 +40,9 @@ let parse (fname, re_group) =
       Printf.eprintf "dropping %s because of %s\n" fname (Printexc.to_string e);
       []
   in
-  sample, ilst
+  run, ilst
 
-let scan_directory (dir : string) : ((sample * Info.t list) list) =
+let scan_directory (dir : string) : ((sample * info list) list) =
   let rec loop acc = function
     | [] -> acc
     | dir :: t ->
@@ -65,3 +63,4 @@ let scan_directory (dir : string) : ((sample * Info.t list) list) =
   |> List.map ~f:parse
   |> join_by_fst
   |> List.sort ~cmp:compare
+
