@@ -1,6 +1,6 @@
 description="Normalize HLA typing output."
-requires="nonstd cmdliner re re.posix re.glob"
-version="0.0.2"
+requires="nonstd cmdliner re re.posix re.glob oml"
+version="0.0.3"
 directory="."
 archive(byte)="hlarp.cma"
 archive(native)="hlarp.cmxa"

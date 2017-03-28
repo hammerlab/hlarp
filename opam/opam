@@ -18,4 +18,5 @@ depends: [
   "cmdliner"
   "nonstd"
   "re" {>= "1.5.0"}
+  "oml" {>= "0.0.7"}
 ]
