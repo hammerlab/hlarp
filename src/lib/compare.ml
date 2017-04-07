@@ -247,7 +247,7 @@ let keyed_by_allele_info_assoc ?resolution ?(label_homozygous=true) =
   let to_allele = to_allele ?resolution in
   List.fold_left ~init:[] ~f:(fun acc ai ->
     let k = to_allele ai in
-    if List.mem_assoc k acc then begin
+    if List.Assoc.mem k acc then begin
       if label_homozygous then
         (k ^ "x2", ai) :: acc
       else
@@ -298,7 +298,7 @@ let to_metric = function
           if i = infinity then begin
             let missing =
               List.filter_map p ~f:(fun (k, _) ->
-                  if not (List.mem_assoc k q) then Some k else None)
+                  if not (List.Assoc.mem k q) then Some k else None)
             in
             eprintf "infinity! alleles found in p but not in q: %s \n\tp: %0.16f %s\n\tq: %0.16f %s\n"
               (String.concat "; " missing)
